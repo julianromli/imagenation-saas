@@ -1,0 +1,36 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "extends": [
+    "ultracite/biome/core",
+    "ultracite/biome/react",
+    "ultracite/biome/tanstack",
+    "ultracite/biome/vitest"
+  ],
+  "files": {
+    "includes": [
+      "!dist",
+      "!drizzle/meta",
+      "!.output",
+      "!src/components/ui",
+      "!src/logo.svg",
+      "!src/routeTree.gen.ts",
+      "!src/styles.css"
+    ]
+  },
+  "linter": {
+    "rules": {
+      "correctness": {
+        "useImageSize": "off"
+      },
+      "nursery": {
+        "useSortedClasses": "off"
+      },
+      "performance": {
+        "noJsxPropsBind": "off"
+      },
+      "style": {
+        "useConsistentTypeDefinitions": "off"
+      }
+    }
+  }
+}

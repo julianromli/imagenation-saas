@@ -8,59 +8,601 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from "./routes/__root"
-import { Route as IndexRouteImport } from "./routes/index"
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as AccountRouteImport } from './routes/account'
+import { Route as AdminRouteImport } from './routes/admin'
+import { Route as CartRouteImport } from './routes/cart'
+import { Route as CheckoutRouteImport } from './routes/checkout'
+import { Route as SignInRouteImport } from './routes/sign-in'
+import { Route as SignUpRouteImport } from './routes/sign-up'
+import { Route as AccountOrdersRouteImport } from './routes/account/orders'
+import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminOrdersRouteImport } from './routes/admin/orders'
+import { Route as AdminProductsRouteImport } from './routes/admin/products'
+import { Route as ApiCheckoutRouteImport } from './routes/api/checkout'
+import { Route as ApiUploadthingRouteImport } from './routes/api/uploadthing'
+import { Route as LegalPrivacyRouteImport } from './routes/legal/privacy'
+import { Route as LegalRefundRouteImport } from './routes/legal/refund'
+import { Route as LegalShippingRouteImport } from './routes/legal/shipping'
+import { Route as LegalTermsRouteImport } from './routes/legal/terms'
+import { Route as OrdersTokenRouteImport } from './routes/orders/$token'
+import { Route as ProductsIndexRouteImport } from './routes/products/index'
+import { Route as ProductsSlugRouteImport } from './routes/products/$slug'
+import { Route as AdminOrdersIdRouteImport } from './routes/admin/orders/$id'
+import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiInternalCleanupRouteImport } from './routes/api/internal/cleanup'
+import { Route as ApiWebhooksMayarRouteImport } from './routes/api/webhooks/mayar'
+import { Route as ApiWebhooksMayarSecretRouteImport } from './routes/api/webhooks/mayar/$secret'
 
 const IndexRoute = IndexRouteImport.update({
-  id: "/",
-  path: "/",
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AccountRoute = AccountRouteImport.update({
+  id: '/account',
+  path: '/account',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CartRoute = CartRouteImport.update({
+  id: '/cart',
+  path: '/cart',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CheckoutRoute = CheckoutRouteImport.update({
+  id: '/checkout',
+  path: '/checkout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignInRoute = SignInRouteImport.update({
+  id: '/sign-in',
+  path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignUpRoute = SignUpRouteImport.update({
+  id: '/sign-up',
+  path: '/sign-up',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AccountOrdersRoute = AccountOrdersRouteImport.update({
+  id: '/orders',
+  path: '/orders',
+  getParentRoute: () => AccountRoute,
+} as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminOrdersRoute = AdminOrdersRouteImport.update({
+  id: '/orders',
+  path: '/orders',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminProductsRoute = AdminProductsRouteImport.update({
+  id: '/products',
+  path: '/products',
+  getParentRoute: () => AdminRoute,
+} as any)
+const ApiCheckoutRoute = ApiCheckoutRouteImport.update({
+  id: '/api/checkout',
+  path: '/api/checkout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiUploadthingRoute = ApiUploadthingRouteImport.update({
+  id: '/api/uploadthing',
+  path: '/api/uploadthing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LegalPrivacyRoute = LegalPrivacyRouteImport.update({
+  id: '/legal/privacy',
+  path: '/legal/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LegalRefundRoute = LegalRefundRouteImport.update({
+  id: '/legal/refund',
+  path: '/legal/refund',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LegalShippingRoute = LegalShippingRouteImport.update({
+  id: '/legal/shipping',
+  path: '/legal/shipping',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LegalTermsRoute = LegalTermsRouteImport.update({
+  id: '/legal/terms',
+  path: '/legal/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OrdersTokenRoute = OrdersTokenRouteImport.update({
+  id: '/orders/$token',
+  path: '/orders/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProductsIndexRoute = ProductsIndexRouteImport.update({
+  id: '/products/',
+  path: '/products/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProductsSlugRoute = ProductsSlugRouteImport.update({
+  id: '/products/$slug',
+  path: '/products/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminOrdersIdRoute = AdminOrdersIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AdminOrdersRoute,
+} as any)
+const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
+  id: '/api/auth/$',
+  path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiInternalCleanupRoute = ApiInternalCleanupRouteImport.update({
+  id: '/api/internal/cleanup',
+  path: '/api/internal/cleanup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiWebhooksMayarRoute = ApiWebhooksMayarRouteImport.update({
+  id: '/api/webhooks/mayar',
+  path: '/api/webhooks/mayar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiWebhooksMayarSecretRoute = ApiWebhooksMayarSecretRouteImport.update({
+  id: '/$secret',
+  path: '/$secret',
+  getParentRoute: () => ApiWebhooksMayarRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
-  "/": typeof IndexRoute
+  '/': typeof IndexRoute
+  '/account': typeof AccountRouteWithChildren
+  '/admin': typeof AdminRouteWithChildren
+  '/cart': typeof CartRoute
+  '/checkout': typeof CheckoutRoute
+  '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
+  '/account/orders': typeof AccountOrdersRoute
+  '/admin/orders': typeof AdminOrdersRouteWithChildren
+  '/admin/products': typeof AdminProductsRoute
+  '/api/checkout': typeof ApiCheckoutRoute
+  '/api/uploadthing': typeof ApiUploadthingRoute
+  '/legal/privacy': typeof LegalPrivacyRoute
+  '/legal/refund': typeof LegalRefundRoute
+  '/legal/shipping': typeof LegalShippingRoute
+  '/legal/terms': typeof LegalTermsRoute
+  '/orders/$token': typeof OrdersTokenRoute
+  '/products/$slug': typeof ProductsSlugRoute
+  '/admin/': typeof AdminIndexRoute
+  '/products/': typeof ProductsIndexRoute
+  '/admin/orders/$id': typeof AdminOrdersIdRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/internal/cleanup': typeof ApiInternalCleanupRoute
+  '/api/webhooks/mayar': typeof ApiWebhooksMayarRouteWithChildren
+  '/api/webhooks/mayar/$secret': typeof ApiWebhooksMayarSecretRoute
 }
 export interface FileRoutesByTo {
-  "/": typeof IndexRoute
+  '/': typeof IndexRoute
+  '/account': typeof AccountRouteWithChildren
+  '/cart': typeof CartRoute
+  '/checkout': typeof CheckoutRoute
+  '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
+  '/account/orders': typeof AccountOrdersRoute
+  '/admin/orders': typeof AdminOrdersRouteWithChildren
+  '/admin/products': typeof AdminProductsRoute
+  '/api/checkout': typeof ApiCheckoutRoute
+  '/api/uploadthing': typeof ApiUploadthingRoute
+  '/legal/privacy': typeof LegalPrivacyRoute
+  '/legal/refund': typeof LegalRefundRoute
+  '/legal/shipping': typeof LegalShippingRoute
+  '/legal/terms': typeof LegalTermsRoute
+  '/orders/$token': typeof OrdersTokenRoute
+  '/products/$slug': typeof ProductsSlugRoute
+  '/admin': typeof AdminIndexRoute
+  '/products': typeof ProductsIndexRoute
+  '/admin/orders/$id': typeof AdminOrdersIdRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/internal/cleanup': typeof ApiInternalCleanupRoute
+  '/api/webhooks/mayar': typeof ApiWebhooksMayarRouteWithChildren
+  '/api/webhooks/mayar/$secret': typeof ApiWebhooksMayarSecretRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  "/": typeof IndexRoute
+  '/': typeof IndexRoute
+  '/account': typeof AccountRouteWithChildren
+  '/admin': typeof AdminRouteWithChildren
+  '/cart': typeof CartRoute
+  '/checkout': typeof CheckoutRoute
+  '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
+  '/account/orders': typeof AccountOrdersRoute
+  '/admin/orders': typeof AdminOrdersRouteWithChildren
+  '/admin/products': typeof AdminProductsRoute
+  '/api/checkout': typeof ApiCheckoutRoute
+  '/api/uploadthing': typeof ApiUploadthingRoute
+  '/legal/privacy': typeof LegalPrivacyRoute
+  '/legal/refund': typeof LegalRefundRoute
+  '/legal/shipping': typeof LegalShippingRoute
+  '/legal/terms': typeof LegalTermsRoute
+  '/orders/$token': typeof OrdersTokenRoute
+  '/products/$slug': typeof ProductsSlugRoute
+  '/admin/': typeof AdminIndexRoute
+  '/products/': typeof ProductsIndexRoute
+  '/admin/orders/$id': typeof AdminOrdersIdRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/internal/cleanup': typeof ApiInternalCleanupRoute
+  '/api/webhooks/mayar': typeof ApiWebhooksMayarRouteWithChildren
+  '/api/webhooks/mayar/$secret': typeof ApiWebhooksMayarSecretRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: "/"
+  fullPaths:
+    | '/'
+    | '/account'
+    | '/admin'
+    | '/cart'
+    | '/checkout'
+    | '/sign-in'
+    | '/sign-up'
+    | '/account/orders'
+    | '/admin/orders'
+    | '/admin/products'
+    | '/api/checkout'
+    | '/api/uploadthing'
+    | '/legal/privacy'
+    | '/legal/refund'
+    | '/legal/shipping'
+    | '/legal/terms'
+    | '/orders/$token'
+    | '/products/$slug'
+    | '/admin/'
+    | '/products/'
+    | '/admin/orders/$id'
+    | '/api/auth/$'
+    | '/api/internal/cleanup'
+    | '/api/webhooks/mayar'
+    | '/api/webhooks/mayar/$secret'
   fileRoutesByTo: FileRoutesByTo
-  to: "/"
-  id: "__root__" | "/"
+  to:
+    | '/'
+    | '/account'
+    | '/cart'
+    | '/checkout'
+    | '/sign-in'
+    | '/sign-up'
+    | '/account/orders'
+    | '/admin/orders'
+    | '/admin/products'
+    | '/api/checkout'
+    | '/api/uploadthing'
+    | '/legal/privacy'
+    | '/legal/refund'
+    | '/legal/shipping'
+    | '/legal/terms'
+    | '/orders/$token'
+    | '/products/$slug'
+    | '/admin'
+    | '/products'
+    | '/admin/orders/$id'
+    | '/api/auth/$'
+    | '/api/internal/cleanup'
+    | '/api/webhooks/mayar'
+    | '/api/webhooks/mayar/$secret'
+  id:
+    | '__root__'
+    | '/'
+    | '/account'
+    | '/admin'
+    | '/cart'
+    | '/checkout'
+    | '/sign-in'
+    | '/sign-up'
+    | '/account/orders'
+    | '/admin/orders'
+    | '/admin/products'
+    | '/api/checkout'
+    | '/api/uploadthing'
+    | '/legal/privacy'
+    | '/legal/refund'
+    | '/legal/shipping'
+    | '/legal/terms'
+    | '/orders/$token'
+    | '/products/$slug'
+    | '/admin/'
+    | '/products/'
+    | '/admin/orders/$id'
+    | '/api/auth/$'
+    | '/api/internal/cleanup'
+    | '/api/webhooks/mayar'
+    | '/api/webhooks/mayar/$secret'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AccountRoute: typeof AccountRouteWithChildren
+  AdminRoute: typeof AdminRouteWithChildren
+  CartRoute: typeof CartRoute
+  CheckoutRoute: typeof CheckoutRoute
+  SignInRoute: typeof SignInRoute
+  SignUpRoute: typeof SignUpRoute
+  ApiCheckoutRoute: typeof ApiCheckoutRoute
+  ApiUploadthingRoute: typeof ApiUploadthingRoute
+  LegalPrivacyRoute: typeof LegalPrivacyRoute
+  LegalRefundRoute: typeof LegalRefundRoute
+  LegalShippingRoute: typeof LegalShippingRoute
+  LegalTermsRoute: typeof LegalTermsRoute
+  OrdersTokenRoute: typeof OrdersTokenRoute
+  ProductsSlugRoute: typeof ProductsSlugRoute
+  ProductsIndexRoute: typeof ProductsIndexRoute
+  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiInternalCleanupRoute: typeof ApiInternalCleanupRoute
+  ApiWebhooksMayarRoute: typeof ApiWebhooksMayarRouteWithChildren
 }
 
-declare module "@tanstack/react-router" {
+declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    "/": {
-      id: "/"
-      path: "/"
-      fullPath: "/"
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/account': {
+      id: '/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof AccountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cart': {
+      id: '/cart'
+      path: '/cart'
+      fullPath: '/cart'
+      preLoaderRoute: typeof CartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/checkout': {
+      id: '/checkout'
+      path: '/checkout'
+      fullPath: '/checkout'
+      preLoaderRoute: typeof CheckoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-in': {
+      id: '/sign-in'
+      path: '/sign-in'
+      fullPath: '/sign-in'
+      preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-up': {
+      id: '/sign-up'
+      path: '/sign-up'
+      fullPath: '/sign-up'
+      preLoaderRoute: typeof SignUpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/account/orders': {
+      id: '/account/orders'
+      path: '/orders'
+      fullPath: '/account/orders'
+      preLoaderRoute: typeof AccountOrdersRouteImport
+      parentRoute: typeof AccountRoute
+    }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/orders': {
+      id: '/admin/orders'
+      path: '/orders'
+      fullPath: '/admin/orders'
+      preLoaderRoute: typeof AdminOrdersRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/products': {
+      id: '/admin/products'
+      path: '/products'
+      fullPath: '/admin/products'
+      preLoaderRoute: typeof AdminProductsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/api/checkout': {
+      id: '/api/checkout'
+      path: '/api/checkout'
+      fullPath: '/api/checkout'
+      preLoaderRoute: typeof ApiCheckoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/uploadthing': {
+      id: '/api/uploadthing'
+      path: '/api/uploadthing'
+      fullPath: '/api/uploadthing'
+      preLoaderRoute: typeof ApiUploadthingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/legal/privacy': {
+      id: '/legal/privacy'
+      path: '/legal/privacy'
+      fullPath: '/legal/privacy'
+      preLoaderRoute: typeof LegalPrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/legal/refund': {
+      id: '/legal/refund'
+      path: '/legal/refund'
+      fullPath: '/legal/refund'
+      preLoaderRoute: typeof LegalRefundRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/legal/shipping': {
+      id: '/legal/shipping'
+      path: '/legal/shipping'
+      fullPath: '/legal/shipping'
+      preLoaderRoute: typeof LegalShippingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/legal/terms': {
+      id: '/legal/terms'
+      path: '/legal/terms'
+      fullPath: '/legal/terms'
+      preLoaderRoute: typeof LegalTermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/orders/$token': {
+      id: '/orders/$token'
+      path: '/orders/$token'
+      fullPath: '/orders/$token'
+      preLoaderRoute: typeof OrdersTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/products/': {
+      id: '/products/'
+      path: '/products'
+      fullPath: '/products/'
+      preLoaderRoute: typeof ProductsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/products/$slug': {
+      id: '/products/$slug'
+      path: '/products/$slug'
+      fullPath: '/products/$slug'
+      preLoaderRoute: typeof ProductsSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/orders/$id': {
+      id: '/admin/orders/$id'
+      path: '/$id'
+      fullPath: '/admin/orders/$id'
+      preLoaderRoute: typeof AdminOrdersIdRouteImport
+      parentRoute: typeof AdminOrdersRoute
+    }
+    '/api/auth/$': {
+      id: '/api/auth/$'
+      path: '/api/auth/$'
+      fullPath: '/api/auth/$'
+      preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/internal/cleanup': {
+      id: '/api/internal/cleanup'
+      path: '/api/internal/cleanup'
+      fullPath: '/api/internal/cleanup'
+      preLoaderRoute: typeof ApiInternalCleanupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/webhooks/mayar': {
+      id: '/api/webhooks/mayar'
+      path: '/api/webhooks/mayar'
+      fullPath: '/api/webhooks/mayar'
+      preLoaderRoute: typeof ApiWebhooksMayarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/webhooks/mayar/$secret': {
+      id: '/api/webhooks/mayar/$secret'
+      path: '/$secret'
+      fullPath: '/api/webhooks/mayar/$secret'
+      preLoaderRoute: typeof ApiWebhooksMayarSecretRouteImport
+      parentRoute: typeof ApiWebhooksMayarRoute
     }
   }
 }
 
+interface AccountRouteChildren {
+  AccountOrdersRoute: typeof AccountOrdersRoute
+}
+
+const AccountRouteChildren: AccountRouteChildren = {
+  AccountOrdersRoute: AccountOrdersRoute,
+}
+
+const AccountRouteWithChildren =
+  AccountRoute._addFileChildren(AccountRouteChildren)
+
+interface AdminOrdersRouteChildren {
+  AdminOrdersIdRoute: typeof AdminOrdersIdRoute
+}
+
+const AdminOrdersRouteChildren: AdminOrdersRouteChildren = {
+  AdminOrdersIdRoute: AdminOrdersIdRoute,
+}
+
+const AdminOrdersRouteWithChildren = AdminOrdersRoute._addFileChildren(
+  AdminOrdersRouteChildren,
+)
+
+interface AdminRouteChildren {
+  AdminOrdersRoute: typeof AdminOrdersRouteWithChildren
+  AdminProductsRoute: typeof AdminProductsRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminOrdersRoute: AdminOrdersRouteWithChildren,
+  AdminProductsRoute: AdminProductsRoute,
+  AdminIndexRoute: AdminIndexRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
+interface ApiWebhooksMayarRouteChildren {
+  ApiWebhooksMayarSecretRoute: typeof ApiWebhooksMayarSecretRoute
+}
+
+const ApiWebhooksMayarRouteChildren: ApiWebhooksMayarRouteChildren = {
+  ApiWebhooksMayarSecretRoute: ApiWebhooksMayarSecretRoute,
+}
+
+const ApiWebhooksMayarRouteWithChildren =
+  ApiWebhooksMayarRoute._addFileChildren(ApiWebhooksMayarRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AccountRoute: AccountRouteWithChildren,
+  AdminRoute: AdminRouteWithChildren,
+  CartRoute: CartRoute,
+  CheckoutRoute: CheckoutRoute,
+  SignInRoute: SignInRoute,
+  SignUpRoute: SignUpRoute,
+  ApiCheckoutRoute: ApiCheckoutRoute,
+  ApiUploadthingRoute: ApiUploadthingRoute,
+  LegalPrivacyRoute: LegalPrivacyRoute,
+  LegalRefundRoute: LegalRefundRoute,
+  LegalShippingRoute: LegalShippingRoute,
+  LegalTermsRoute: LegalTermsRoute,
+  OrdersTokenRoute: OrdersTokenRoute,
+  ProductsSlugRoute: ProductsSlugRoute,
+  ProductsIndexRoute: ProductsIndexRoute,
+  ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiInternalCleanupRoute: ApiInternalCleanupRoute,
+  ApiWebhooksMayarRoute: ApiWebhooksMayarRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
 
-import type { getRouter } from "./router.tsx"
-import type { createStart } from "@tanstack/react-start"
-declare module "@tanstack/react-start" {
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
   interface Register {
     ssr: true
     router: Awaited<ReturnType<typeof getRouter>>

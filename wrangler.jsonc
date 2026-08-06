@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "then-ecommerce",
+  "main": "@tanstack/react-start/server-entry",
+  "compatibility_date": "2026-08-05",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "MAYAR_ENVIRONMENT": "sandbox",
+    "SHIPPING_FLAT_RATE": "0"
+  }
+}
