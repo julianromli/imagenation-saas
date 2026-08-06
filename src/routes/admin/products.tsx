@@ -372,6 +372,7 @@ function ProductEditForm({
           type="number"
         />
         <select
+          aria-label="Category"
           className="h-9 rounded-xl border border-input bg-background px-3 text-sm"
           defaultValue={product.categoryId ?? ""}
           name="categoryId"

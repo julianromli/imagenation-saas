@@ -172,7 +172,10 @@ function Calendar({
       }}
       formatters={{
         formatMonthDropdown: (date) =>
-          date.toLocaleString(locale?.code, { month: "short" }),
+          date.toLocaleString(locale?.code ?? "en-US", {
+            month: "short",
+            timeZone: "UTC",
+          }),
         ...formatters,
       }}
       locale={locale}
@@ -204,7 +207,9 @@ function CalendarDayButton({
         defaultClassNames.day,
         className
       )}
-      data-day={day.date.toLocaleDateString(locale?.code)}
+      data-day={day.date.toLocaleDateString(locale?.code ?? "en-US", {
+        timeZone: "UTC",
+      })}
       data-range-end={modifiers.range_end}
       data-range-middle={modifiers.range_middle}
       data-range-start={modifiers.range_start}

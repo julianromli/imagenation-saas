@@ -110,18 +110,3 @@ export const mergeCart = createServerFn({ method: "POST" })
 
     return getServerCart();
   });
-
-export const clearServerCart = createServerFn({ method: "POST" }).handler(
-  async () => {
-    const session = await getSession();
-
-    if (!session) {
-      return;
-    }
-
-    const db = getDb();
-    const cart = await getOrCreateCart(session.user.id);
-
-    await db.delete(cartItems).where(eq(cartItems.cartId, cart.id));
-  }
-);

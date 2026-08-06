@@ -32,6 +32,11 @@ function ToggleGroup({
     spacing?: number;
     orientation?: "horizontal" | "vertical";
   }) {
+  const contextValue = React.useMemo(
+    () => ({ orientation, size, spacing, variant }),
+    [orientation, size, spacing, variant]
+  );
+
   return (
     <ToggleGroupPrimitive
       className={cn(
@@ -46,9 +51,7 @@ function ToggleGroup({
       style={{ "--gap": spacing } as React.CSSProperties}
       {...props}
     >
-      <ToggleGroupContext.Provider
-        value={{ orientation, size, spacing, variant }}
-      >
+      <ToggleGroupContext.Provider value={contextValue}>
         {children}
       </ToggleGroupContext.Provider>
     </ToggleGroupPrimitive>

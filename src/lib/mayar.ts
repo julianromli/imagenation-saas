@@ -6,7 +6,7 @@ import { getRuntimeEnv, requireEnv } from "@/lib/runtime-env";
 const invoiceResponseSchema = z.object({
   expiredAt: z.union([z.number(), z.string()]),
   id: z.string(),
-  link: z.string().url(),
+  link: z.url(),
   transactionId: z.string(),
 });
 
@@ -64,6 +64,23 @@ async function requestMayar<T>(
       ...init?.headers,
     },
   });
+
+  if (!response.ok) {
+    let message = "Mayar request failed";
+
+    try {
+      const body = (await response.json()) as {
+        message?: string;
+        messages?: string;
+      };
+      message = body.messages ?? body.message ?? message;
+    } catch {
+      // Keep the status-based error when Mayar returns a non-JSON response.
+    }
+
+    throw new Error(`${message} (${response.status})`);
+  }
+
   const body = (await response.json()) as {
     data?: unknown;
     message?: string;
@@ -71,10 +88,7 @@ async function requestMayar<T>(
     statusCode?: number;
   };
 
-  if (
-    !response.ok ||
-    (body.statusCode !== undefined && body.statusCode >= 400)
-  ) {
+  if (body.statusCode !== undefined && body.statusCode >= 400) {
     const message = body.messages ?? body.message ?? "Mayar request failed";
 
     throw new Error(`${message} (${response.status})`);

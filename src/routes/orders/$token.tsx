@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { Check, Circle, Copy, ExternalLink, RefreshCw } from "lucide-react";
-import { useEffect, useEffectEvent, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { getSession } from "@/lib/auth.functions";
@@ -41,42 +41,45 @@ function OrderStatusPage() {
     order.status as (typeof statuses)[number]
   );
 
-  const refreshPayment = useEffectEvent(async (silent: boolean) => {
-    if (order.status !== "pending_payment") {
-      return;
-    }
-
-    setRefreshing(true);
-    setRefreshError("");
-    setRefreshNote("");
-
-    try {
-      const result = await refreshOrderPayment({
-        data: { token: params.token },
-      });
-
-      if (result.processed) {
-        await router.invalidate();
+  const refreshPayment = useCallback(
+    async (silent: boolean) => {
+      if (order.status !== "pending_payment") {
         return;
       }
 
-      if (!silent) {
-        setRefreshNote(
-          "Payment is not confirmed yet. Finish payment, then refresh again."
-        );
+      setRefreshing(true);
+      setRefreshError("");
+      setRefreshNote("");
+
+      try {
+        const result = await refreshOrderPayment({
+          data: { token: params.token },
+        });
+
+        if (result.processed) {
+          await router.invalidate();
+          return;
+        }
+
+        if (!silent) {
+          setRefreshNote(
+            "Payment is not confirmed yet. Finish payment, then refresh again."
+          );
+        }
+      } catch (error) {
+        if (!silent) {
+          setRefreshError(
+            error instanceof Error
+              ? error.message
+              : "Unable to refresh payment status"
+          );
+        }
+      } finally {
+        setRefreshing(false);
       }
-    } catch (error) {
-      if (!silent) {
-        setRefreshError(
-          error instanceof Error
-            ? error.message
-            : "Unable to refresh payment status"
-        );
-      }
-    } finally {
-      setRefreshing(false);
-    }
-  });
+    },
+    [order.status, params.token, router]
+  );
 
   useEffect(() => {
     saveLastOrderHint({
@@ -88,7 +91,7 @@ function OrderStatusPage() {
 
   useEffect(() => {
     refreshPayment(true).catch(() => undefined);
-  }, []);
+  }, [refreshPayment]);
 
   async function claim() {
     setClaiming(true);

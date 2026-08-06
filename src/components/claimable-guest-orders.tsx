@@ -90,8 +90,10 @@ export function ClaimableGuestOrders({
               <div>
                 <p className="font-medium">{order.orderNumber}</p>
                 <p className="mt-1 text-muted-foreground text-sm">
-                  {order.createdAt.toLocaleDateString("en-ID")} ·{" "}
-                  {formatOrderStatus(order.status)} · {formatIdr(order.total)}
+                  {order.createdAt.toLocaleDateString("en-ID", {
+                    timeZone: "Asia/Jakarta",
+                  })}{" "}
+                  · {formatOrderStatus(order.status)} · {formatIdr(order.total)}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">

@@ -103,24 +103,38 @@ function Carousel({
     api.on("select", onSelect);
 
     return () => {
-      api?.off("select", onSelect);
+      api.off("reInit", onSelect);
+      api.off("select", onSelect);
     };
   }, [api, onSelect]);
 
+  const resolvedOrientation =
+    orientation || (opts?.axis === "y" ? "vertical" : "horizontal");
+  const contextValue = React.useMemo(
+    () => ({
+      api,
+      canScrollNext,
+      canScrollPrev,
+      carouselRef,
+      opts,
+      orientation: resolvedOrientation,
+      scrollNext,
+      scrollPrev,
+    }),
+    [
+      api,
+      canScrollNext,
+      canScrollPrev,
+      carouselRef,
+      opts,
+      resolvedOrientation,
+      scrollNext,
+      scrollPrev,
+    ]
+  );
+
   return (
-    <CarouselContext.Provider
-      value={{
-        api,
-        canScrollNext,
-        canScrollPrev,
-        carouselRef,
-        opts,
-        orientation:
-          orientation || (opts?.axis === "y" ? "vertical" : "horizontal"),
-        scrollNext,
-        scrollPrev,
-      }}
-    >
+    <CarouselContext.Provider value={contextValue}>
       <div
         aria-roledescription="carousel"
         className={cn("relative", className)}

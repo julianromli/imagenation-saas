@@ -1,4 +1,5 @@
 const STORAGE_KEY = "then-ecommerce-last-order-v1";
+const STORAGE_EVENT = "then-ecommerce:last-order-hint";
 
 export type LastOrderHint = {
   createdAt: string;
@@ -12,38 +13,61 @@ export function saveLastOrderHint(hint: LastOrderHint) {
   }
 
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(hint));
+  window.dispatchEvent(new Event(STORAGE_EVENT));
 }
 
-export function getLastOrderHint(): LastOrderHint | null {
+export function getLastOrderHintSnapshot() {
   if (typeof window === "undefined") {
     return null;
   }
 
   try {
-    const value: unknown = JSON.parse(
-      window.localStorage.getItem(STORAGE_KEY) ?? "null"
-    );
-
-    if (
-      typeof value !== "object" ||
-      value === null ||
-      typeof (value as LastOrderHint).orderNumber !== "string" ||
-      typeof (value as LastOrderHint).orderStatusPath !== "string" ||
-      typeof (value as LastOrderHint).createdAt !== "string"
-    ) {
-      return null;
-    }
-
-    return value as LastOrderHint;
+    return window.localStorage.getItem(STORAGE_KEY);
   } catch {
     return null;
   }
 }
 
-export function clearLastOrderHint() {
-  if (typeof window === "undefined") {
-    return;
+export function parseLastOrderHint(value: string | null): LastOrderHint | null {
+  if (!value) {
+    return null;
   }
 
-  window.localStorage.removeItem(STORAGE_KEY);
+  try {
+    const parsed: unknown = JSON.parse(value);
+
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      typeof (parsed as LastOrderHint).orderNumber !== "string" ||
+      typeof (parsed as LastOrderHint).orderStatusPath !== "string" ||
+      typeof (parsed as LastOrderHint).createdAt !== "string"
+    ) {
+      return null;
+    }
+
+    return parsed as LastOrderHint;
+  } catch {
+    return null;
+  }
+}
+
+export function subscribeToLastOrderHint(onChange: () => void) {
+  if (typeof window === "undefined") {
+    return () => undefined;
+  }
+
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === STORAGE_KEY) {
+      onChange();
+    }
+  };
+
+  window.addEventListener("storage", onStorage);
+  window.addEventListener(STORAGE_EVENT, onChange);
+
+  return () => {
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener(STORAGE_EVENT, onChange);
+  };
 }

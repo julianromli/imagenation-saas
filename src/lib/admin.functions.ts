@@ -32,13 +32,13 @@ export const getAdminStats = createServerFn({ method: "GET" }).handler(
   async () => {
     await ensureAdmin();
     const db = getDb();
-    const [productCount] = await db
-      .select({ count: count(products.id) })
-      .from(products)
-      .where(eq(products.status, "active"));
-    const [orderCount] = await db
-      .select({ count: count(orders.id) })
-      .from(orders);
+    const [[productCount], [orderCount]] = await Promise.all([
+      db
+        .select({ count: count(products.id) })
+        .from(products)
+        .where(eq(products.status, "active")),
+      db.select({ count: count(orders.id) }).from(orders),
+    ]);
 
     return {
       activeProducts: productCount?.count ?? 0,
@@ -163,7 +163,7 @@ export const setProductImage = createServerFn({ method: "POST" })
       .object({
         alt: z.string().trim().min(1).max(160),
         productId: z.string().min(1),
-        url: z.string().url(),
+        url: z.url(),
       })
       .parse(data)
   )

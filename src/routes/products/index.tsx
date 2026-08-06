@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Search } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { z } from "zod";
 
 import { type CatalogProduct, ProductCard } from "@/components/product-card";
@@ -13,10 +13,11 @@ const searchSchema = z.object({
   search: z.string().optional(),
 });
 
+// biome-ignore assist/source/useSortedKeys: TanStack Router requires validateSearch before loader.
 export const Route = createFileRoute("/products/")({
   component: ProductsPage,
-  loader: () => Promise.all([getCategories(), getProducts({ data: {} })]),
   validateSearch: searchSchema,
+  loader: () => Promise.all([getCategories(), getProducts({ data: {} })]),
 });
 
 function ProductsPage() {
@@ -38,15 +39,18 @@ function ProductsPage() {
     return matchesSearch && matchesCategory;
   });
 
-  async function submitSearch(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    await navigate({
-      search: (current) => ({
-        ...current,
-        search: value.trim() || undefined,
-      }),
-    });
-  }
+  const submitSearch = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      await navigate({
+        search: (current) => ({
+          ...current,
+          search: value.trim() || undefined,
+        }),
+      });
+    },
+    [navigate, value]
+  );
 
   return (
     <main className="mx-auto max-w-7xl px-5 pt-14 pb-20 sm:px-8">

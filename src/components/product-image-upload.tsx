@@ -64,6 +64,7 @@ export function ProductImageUpload({
     <div className="flex flex-col items-end gap-1">
       <input
         accept="image/*"
+        aria-label={`Select image for ${productName}`}
         className="sr-only"
         id={`image-${productId}`}
         onChange={chooseFile}

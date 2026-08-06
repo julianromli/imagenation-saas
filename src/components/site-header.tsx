@@ -1,17 +1,23 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowUpRight, ShoppingBag } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 import { useCart } from "@/components/cart-provider";
-import { getLastOrderHint, type LastOrderHint } from "@/lib/order-access";
+import {
+  getLastOrderHintSnapshot,
+  parseLastOrderHint,
+  subscribeToLastOrderHint,
+} from "@/lib/order-access";
 
 export function SiteHeader() {
   const { count } = useCart();
-  const [lastOrder, setLastOrder] = useState<LastOrderHint | null>(null);
-
-  useEffect(() => {
-    setLastOrder(getLastOrderHint());
-  }, []);
+  const lastOrder = parseLastOrderHint(
+    useSyncExternalStore(
+      subscribeToLastOrderHint,
+      getLastOrderHintSnapshot,
+      () => null
+    )
+  );
 
   return (
     <header className="border-border/70 border-b bg-background/95 backdrop-blur">

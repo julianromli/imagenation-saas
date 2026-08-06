@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { LoaderCircle } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import { useCart } from "@/components/cart-provider";
 import { Button } from "@/components/ui/button";
@@ -18,38 +18,41 @@ function SignInPage() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError("");
-    setSubmitting(true);
-    const form = new FormData(event.currentTarget);
+  const submit = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      setError("");
+      setSubmitting(true);
+      const form = new FormData(event.currentTarget);
 
-    try {
-      const result = await authClient.signIn.email({
-        email: String(form.get("email") ?? ""),
-        password: String(form.get("password") ?? ""),
-      });
+      try {
+        const result = await authClient.signIn.email({
+          email: String(form.get("email") ?? ""),
+          password: String(form.get("password") ?? ""),
+        });
 
-      if (result.error) {
-        throw new Error(result.error.message);
+        if (result.error) {
+          throw new Error(result.error.message);
+        }
+
+        if (lines.length > 0) {
+          await mergeCart({ data: lines });
+          clear();
+        }
+
+        await navigate({ to: "/account" });
+      } catch (submissionError) {
+        setError(
+          submissionError instanceof Error
+            ? submissionError.message
+            : "Unable to sign in. Check your email and password."
+        );
+      } finally {
+        setSubmitting(false);
       }
-
-      if (lines.length > 0) {
-        await mergeCart({ data: lines });
-        clear();
-      }
-
-      await navigate({ to: "/account" });
-    } catch (submissionError) {
-      setError(
-        submissionError instanceof Error
-          ? submissionError.message
-          : "Unable to sign in. Check your email and password."
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }
+    },
+    [clear, lines, navigate]
+  );
 
   return (
     <main className="mx-auto max-w-md px-5 pt-20 pb-32 sm:px-8">

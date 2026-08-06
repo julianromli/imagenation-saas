@@ -58,9 +58,10 @@ function ChartContainer({
 }) {
   const uniqueId = React.useId();
   const chartId = `chart-${id ?? uniqueId.replace(/:/g, "")}`;
+  const chartContextValue = React.useMemo(() => ({ config }), [config]);
 
   return (
-    <ChartContext.Provider value={{ config }}>
+    <ChartContext.Provider value={chartContextValue}>
       <div
         className={cn(
           "flex aspect-video justify-center text-xs [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-border/50 [&_.recharts-curve.recharts-tooltip-cursor]:stroke-border [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-hidden [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-border [&_.recharts-radial-bar-background-sector]:fill-muted [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-muted [&_.recharts-reference-line_[stroke='#ccc']]:stroke-border [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-sector]:outline-hidden [&_.recharts-surface]:outline-hidden",
@@ -116,21 +117,9 @@ ${colorConfig
 
 const ChartTooltip = RechartsPrimitive.Tooltip;
 
-function ChartTooltipContent({
-  active,
-  payload,
-  className,
-  indicator = "dot",
-  hideLabel = false,
-  hideIndicator = false,
-  label,
-  labelFormatter,
-  labelClassName,
-  formatter,
-  color,
-  nameKey,
-  labelKey,
-}: React.ComponentProps<typeof RechartsPrimitive.Tooltip> &
+type ChartTooltipContentProps = React.ComponentProps<
+  typeof RechartsPrimitive.Tooltip
+> &
   React.ComponentProps<"div"> & {
     hideLabel?: boolean;
     hideIndicator?: boolean;
@@ -143,7 +132,38 @@ function ChartTooltipContent({
       TooltipNameType
     >,
     "accessibilityLayer"
-  >) {
+  >;
+type ChartTooltipContentBodyProps = Omit<
+  ChartTooltipContentProps,
+  "payload"
+> & {
+  payload: NonNullable<ChartTooltipContentProps["payload"]>;
+};
+
+function ChartTooltipContent(props: ChartTooltipContentProps) {
+  const { payload } = props;
+
+  if (!props.active || !payload || payload.length === 0) {
+    return null;
+  }
+
+  return <ChartTooltipContentBody {...props} payload={payload} />;
+}
+
+function ChartTooltipContentBody({
+  payload,
+  className,
+  indicator = "dot",
+  hideLabel = false,
+  hideIndicator = false,
+  label,
+  labelFormatter,
+  labelClassName,
+  formatter,
+  color,
+  nameKey,
+  labelKey,
+}: ChartTooltipContentBodyProps) {
   const { config } = useChart();
 
   const tooltipLabel = React.useMemo(() => {
@@ -182,10 +202,6 @@ function ChartTooltipContent({
     labelKey,
   ]);
 
-  if (!(active && payload?.length)) {
-    return null;
-  }
-
   const nestLabel = payload.length === 1 && indicator !== "dot";
 
   return (
@@ -198,22 +214,32 @@ function ChartTooltipContent({
       {nestLabel ? null : tooltipLabel}
       <div className="grid gap-1.5">
         {payload
-          .filter((item) => item.type !== "none")
-          .map((item, index) => {
+          .flatMap((item, itemIndex) => {
+            if (item.type === "none") {
+              return [];
+            }
+
             const key = `${nameKey ?? item.name ?? item.dataKey ?? "value"}`;
+            const itemKey = `${key}-${item.name ?? ""}-${item.color ?? ""}-${String(item.value ?? "")}`;
             const itemConfig = getPayloadConfigFromPayload(config, item, key);
             const indicatorColor = color ?? item.payload?.fill ?? item.color;
 
-            return (
+            return [
               <div
                 className={cn(
                   "flex w-full flex-wrap items-stretch gap-2 [&>svg]:h-2.5 [&>svg]:w-2.5 [&>svg]:text-muted-foreground",
                   indicator === "dot" && "items-center"
                 )}
-                key={index}
+                key={itemKey}
               >
                 {formatter && item?.value !== undefined && item.name ? (
-                  formatter(item.value, item.name, item, index, item.payload)
+                  formatter(
+                    item.value,
+                    item.name,
+                    item,
+                    itemIndex,
+                    item.payload
+                  )
                 ) : (
                   <>
                     {itemConfig?.icon ? (
@@ -262,8 +288,8 @@ function ChartTooltipContent({
                     </div>
                   </>
                 )}
-              </div>
-            );
+              </div>,
+            ];
           })}
       </div>
     </div>
@@ -296,18 +322,21 @@ function ChartLegendContent({
         className
       )}
     >
-      {payload
-        .filter((item) => item.type !== "none")
-        .map((item, index) => {
-          const key = `${nameKey ?? item.dataKey ?? "value"}`;
+      {payload.flatMap((item) => {
+        if (item.type === "none") {
+          return [];
+        }
+
+        const key = `${nameKey ?? item.dataKey ?? "value"}`;
+        const itemKey = `${key}-${item.color ?? ""}`;
           const itemConfig = getPayloadConfigFromPayload(config, item, key);
 
-          return (
+          return [
             <div
               className={cn(
                 "flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-muted-foreground"
               )}
-              key={index}
+              key={itemKey}
             >
               {itemConfig?.icon && !hideIcon ? (
                 <itemConfig.icon />
@@ -320,8 +349,8 @@ function ChartLegendContent({
                 />
               )}
               {itemConfig?.label}
-            </div>
-          );
+            </div>,
+          ];
         })}
     </div>
   );
