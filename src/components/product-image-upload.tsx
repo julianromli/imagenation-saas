@@ -73,10 +73,13 @@ export function ProductImageUpload({
         type="file"
       />
       <Button
+        aria-busy={isUploading}
         aria-label={`Upload image for ${productName}`}
+        className="rounded-full"
         disabled={isUploading}
         onClick={() => inputRef.current?.click()}
         size="icon"
+        title={`Upload image for ${productName}`}
         type="button"
         variant="outline"
       >

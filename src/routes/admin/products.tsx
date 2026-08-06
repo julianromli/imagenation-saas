@@ -1,10 +1,40 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { Archive, LoaderCircle, Pencil, Plus, X } from "lucide-react";
-import { useState } from "react";
+import {
+  Archive,
+  ImagePlus,
+  LoaderCircle,
+  Pencil,
+  Plus,
+  X,
+} from "lucide-react";
+import { Fragment, useEffect, useState } from "react";
 
 import { ProductImageUpload } from "@/components/product-image-upload";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import {
   archiveProduct,
@@ -12,10 +42,12 @@ import {
   createProduct,
   deleteCategory,
   getAdminProducts,
+  setProductImage,
   updateProduct,
 } from "@/lib/admin.functions";
 import { getCategories } from "@/lib/catalog.functions";
 import { formatIdr } from "@/lib/format";
+import { useUploadThing } from "@/lib/uploadthing-client";
 
 export const Route = createFileRoute("/admin/products")({
   component: AdminProducts,
@@ -27,17 +59,73 @@ function AdminProducts() {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [categorySubmitting, setCategorySubmitting] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageInputKey, setImageInputKey] = useState(0);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [createdProduct, setCreatedProduct] = useState<{
+    id: string;
+    imageUploaded: boolean;
+    name: string;
+  } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const { startUpload } = useUploadThing("productImage");
+
+  useEffect(() => {
+    if (!imageFile) {
+      setImagePreviewUrl(null);
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(imageFile);
+    setImagePreviewUrl(previewUrl);
+
+    return () => {
+      URL.revokeObjectURL(previewUrl);
+    };
+  }, [imageFile]);
+
+  function clearImageSelection() {
+    setImageFile(null);
+    setImageInputKey((current) => current + 1);
+  }
+
+  async function uploadImage(
+    product: { id: string; name: string },
+    image: File
+  ): Promise<string | null> {
+    try {
+      const uploadedFiles = await startUpload([image]);
+      const uploadedFile = uploadedFiles?.[0];
+
+      if (!uploadedFile?.ufsUrl) {
+        throw new Error("Image upload did not return a file URL.");
+      }
+
+      await setProductImage({
+        data: {
+          alt: product.name,
+          productId: product.id,
+          url: uploadedFile.ufsUrl,
+        },
+      });
+      return null;
+    } catch (imageError) {
+      return imageError instanceof Error
+        ? `Product created, but image upload failed: ${imageError.message}`
+        : "Product created, but image upload failed. Upload it again below.";
+    }
+  }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
     setError("");
     const form = new FormData(event.currentTarget);
+    const selectedImage = imageFile;
 
     try {
-      await createProduct({
+      const product = await createProduct({
         data: {
           categoryId: String(form.get("categoryId") || "") || null,
           description: String(form.get("description") ?? ""),
@@ -47,7 +135,26 @@ function AdminProducts() {
           stock: Number(form.get("stock") ?? 0),
         },
       });
+      setCreatedProduct({
+        id: product.id,
+        imageUploaded: false,
+        name: product.name,
+      });
       event.currentTarget.reset();
+      setImageFile(null);
+
+      if (selectedImage) {
+        const imageError = await uploadImage(product, selectedImage);
+
+        if (imageError) {
+          setError(imageError);
+        } else {
+          setCreatedProduct((current) =>
+            current ? { ...current, imageUploaded: true } : current
+          );
+        }
+      }
+
       await router.invalidate();
     } catch (submissionError) {
       setError(
@@ -99,205 +206,352 @@ function AdminProducts() {
         Products
       </h2>
 
-      <form className="mt-8 rounded-3xl border p-6" onSubmit={addCategory}>
-        <h3 className="font-medium">Manage categories</h3>
-        <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-          <label className="flex-1 space-y-2" htmlFor="category-name">
-            <span className="text-sm">Name</span>
-            <Input id="category-name" name="categoryName" required />
-          </label>
-          <label className="flex-1 space-y-2" htmlFor="category-slug">
-            <span className="text-sm">Slug</span>
-            <Input
-              id="category-slug"
-              name="categorySlug"
-              pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
-              required
-            />
-          </label>
-          <label className="flex-1 space-y-2" htmlFor="category-description">
-            <span className="text-sm">Description</span>
-            <Input id="category-description" name="categoryDescription" />
-          </label>
-        </div>
-        <Button
-          className="mt-5 rounded-full"
-          disabled={categorySubmitting}
-          type="submit"
-          variant="outline"
-        >
-          {categorySubmitting ? "Saving category" : "Add category"}
-        </Button>
-        <div className="mt-5 flex flex-wrap gap-2">
-          {categories.map((category) => (
-            <span
-              className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs"
-              key={category.id}
-            >
-              {category.name}
-              <button
-                aria-label={`Delete ${category.name}`}
-                className="inline-flex size-6 items-center justify-center rounded-full text-muted-foreground transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-background/80 hover:text-destructive active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
-                onClick={async () => {
-                  await deleteCategory({ data: { id: category.id } });
-                  await router.invalidate();
-                }}
-                type="button"
-              >
-                <X aria-hidden="true" className="size-3.5" />
-              </button>
-            </span>
-          ))}
-        </div>
-      </form>
-
-      <form className="mt-8 rounded-3xl border p-6" onSubmit={submit}>
-        <div className="flex items-center gap-3">
-          <span className="inline-flex size-8 items-center justify-center rounded-xl bg-muted">
-            <Plus aria-hidden="true" className="size-4" />
-          </span>
-          <h3 className="font-medium">Add a product</h3>
-        </div>
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          <Field label="Name" name="name" required />
-          <Field
-            label="Slug"
-            name="slug"
-            pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
-            required
-          />
-          <Field
-            label="Price in IDR"
-            min={0}
-            name="price"
-            required
-            type="number"
-          />
-          <Field
-            label="Available stock"
-            min={0}
-            name="stock"
-            required
-            type="number"
-          />
-          <label className="space-y-2" htmlFor="new-product-category">
-            <span className="text-sm">Category</span>
-            <select
-              className="h-9 w-full rounded-xl border border-input bg-background px-3 text-sm"
-              defaultValue=""
-              id="new-product-category"
-              name="categoryId"
-            >
-              <option value="">No category</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label
-            className="space-y-2 sm:col-span-2"
-            htmlFor="new-product-description"
-          >
-            <span className="text-sm">Description</span>
-            <Textarea
-              id="new-product-description"
-              name="description"
-              required
-            />
-          </label>
-        </div>
-        {error ? (
-          <p className="mt-4 text-destructive text-sm" role="alert">
-            {error}
-          </p>
-        ) : null}
-        <Button
-          className="mt-6 rounded-full"
-          disabled={submitting}
-          type="submit"
-        >
-          {submitting ? (
-            <>
-              <LoaderCircle aria-hidden="true" className="animate-spin" />
-              Saving product
-            </>
-          ) : (
-            "Save product"
-          )}
-        </Button>
-      </form>
-
-      <div className="mt-8 divide-y border-y">
-        {rows.map(({ imageUrl, product }) => (
-          <div className="py-5" key={product.id}>
-            <div className="flex items-center gap-4">
-              <div className="size-16 shrink-0 overflow-hidden rounded-xl bg-muted">
-                {imageUrl ? (
-                  <img
-                    alt=""
-                    className="size-full object-cover"
-                    src={imageUrl}
-                  />
-                ) : null}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{product.name}</p>
-                <p className="mt-1 text-muted-foreground text-sm">
-                  {formatIdr(product.price)} · {product.availableStock}{" "}
-                  available
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {product.status === "active" ? (
-                  <>
-                    <Button
-                      aria-label={`Edit ${product.name}`}
-                      onClick={() =>
-                        setEditingId((current) =>
-                          current === product.id ? null : product.id
-                        )
-                      }
-                      size="icon"
-                      variant="ghost"
-                    >
-                      <Pencil aria-hidden="true" />
-                    </Button>
-                    <ProductImageUpload
-                      onComplete={() => router.invalidate()}
-                      productId={product.id}
-                      productName={product.name}
-                    />
-                    <Button
-                      aria-label={`Archive ${product.name}`}
-                      onClick={() => archive(product.id)}
-                      size="icon"
-                      variant="ghost"
-                    >
-                      <Archive aria-hidden="true" />
-                    </Button>
-                  </>
-                ) : (
-                  <span className="rounded-full bg-muted px-3 py-1 text-muted-foreground text-xs">
-                    Archived
-                  </span>
-                )}
-              </div>
+      <Card className="mt-8 rounded-3xl border bg-transparent shadow-none ring-0">
+        <CardHeader className="p-6 pb-0">
+          <CardTitle>Manage categories</CardTitle>
+        </CardHeader>
+        <CardContent className="p-6 pt-5">
+          <form onSubmit={addCategory}>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Field>
+                <FieldLabel htmlFor="category-name">Name</FieldLabel>
+                <Input id="category-name" name="categoryName" required />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="category-slug">Slug</FieldLabel>
+                <Input
+                  id="category-slug"
+                  name="categorySlug"
+                  pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+                  required
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="category-description">
+                  Description
+                </FieldLabel>
+                <Input id="category-description" name="categoryDescription" />
+              </Field>
             </div>
-            {editingId === product.id ? (
-              <ProductEditForm
-                categories={categories}
-                onSaved={async () => {
-                  setEditingId(null);
-                  await router.invalidate();
-                }}
-                product={product}
-              />
+            <Button
+              className="mt-5 rounded-full"
+              disabled={categorySubmitting}
+              type="submit"
+              variant="outline"
+            >
+              {categorySubmitting ? "Saving category" : "Add category"}
+            </Button>
+          </form>
+          {categories.length > 0 ? (
+            <div className="mt-5 flex flex-wrap gap-2">
+              {categories.map((category) => (
+                <Badge className="gap-2" key={category.id} variant="secondary">
+                  {category.name}
+                  <Button
+                    aria-label={`Delete ${category.name}`}
+                    className="size-5 rounded-full text-muted-foreground hover:bg-background/80 hover:text-destructive"
+                    onClick={async () => {
+                      await deleteCategory({ data: { id: category.id } });
+                      await router.invalidate();
+                    }}
+                    size="icon-xs"
+                    type="button"
+                    variant="ghost"
+                  >
+                    <X aria-hidden="true" className="size-3.5" />
+                  </Button>
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-5 text-muted-foreground text-sm">
+              No categories yet.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="mt-8 rounded-3xl border bg-transparent shadow-none ring-0">
+        <CardHeader className="p-6 pb-0">
+          <CardTitle className="flex items-center gap-3">
+            <span className="inline-flex size-8 items-center justify-center rounded-xl bg-muted">
+              <Plus aria-hidden="true" className="size-4" />
+            </span>
+            Add a product
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-6 pt-6">
+          <form onSubmit={submit}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="name">Name</FieldLabel>
+                <Input id="name" name="name" required />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="slug">Slug</FieldLabel>
+                <Input
+                  id="slug"
+                  name="slug"
+                  pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+                  required
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="price">Price in IDR</FieldLabel>
+                <Input id="price" min={0} name="price" required type="number" />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="stock">Available stock</FieldLabel>
+                <Input id="stock" min={0} name="stock" required type="number" />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="new-product-category">Category</FieldLabel>
+                <NativeSelect
+                  className="w-full"
+                  defaultValue=""
+                  id="new-product-category"
+                  name="categoryId"
+                >
+                  <NativeSelectOption value="">No category</NativeSelectOption>
+                  {categories.map((category) => (
+                    <NativeSelectOption key={category.id} value={category.id}>
+                      {category.name}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              </Field>
+              <Field className="sm:col-span-2">
+                <FieldLabel htmlFor="new-product-description">
+                  Description
+                </FieldLabel>
+                <Textarea
+                  id="new-product-description"
+                  name="description"
+                  required
+                />
+              </Field>
+              <Field className="sm:col-span-2">
+                <FieldLabel htmlFor="new-product-image">
+                  Product image{" "}
+                  <span className="text-muted-foreground">(optional)</span>
+                </FieldLabel>
+                <input
+                  accept="image/*"
+                  className="block w-full rounded-xl border border-input bg-background px-3 py-2 text-sm file:mr-4 file:rounded-full file:border-0 file:bg-muted file:px-3 file:py-1.5 file:font-medium file:text-foreground"
+                  id="new-product-image"
+                  key={imageInputKey}
+                  name="image"
+                  onChange={(event) =>
+                    setImageFile(event.target.files?.[0] ?? null)
+                  }
+                  type="file"
+                />
+                {imageFile && imagePreviewUrl ? (
+                  <div className="flex items-center gap-3 rounded-2xl bg-muted/50 p-3">
+                    <div className="size-16 shrink-0 overflow-hidden rounded-xl bg-muted">
+                      <img
+                        alt="Preview of selected product"
+                        className="size-full object-cover"
+                        src={imagePreviewUrl}
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm">Image preview</p>
+                      <p className="mt-1 truncate text-muted-foreground text-xs">
+                        {imageFile.name}
+                      </p>
+                    </div>
+                    <Button
+                      aria-label="Remove selected product image"
+                      onClick={clearImageSelection}
+                      size="sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ) : null}
+                <FieldDescription>One image, up to 4 MB.</FieldDescription>
+              </Field>
+            </div>
+            {error ? (
+              <Alert className="mt-4" variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             ) : null}
+            <Button
+              className="mt-6 rounded-full"
+              disabled={submitting}
+              type="submit"
+            >
+              {submitting ? (
+                <>
+                  <LoaderCircle aria-hidden="true" className="animate-spin" />
+                  Saving product
+                </>
+              ) : (
+                "Save product"
+              )}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      {createdProduct ? (
+        <div className="mt-4 flex flex-col gap-4 rounded-2xl border border-dashed p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted">
+              <ImagePlus aria-hidden="true" className="size-4" />
+            </span>
+            <div>
+              <p className="font-medium">Product created</p>
+              <p className="mt-1 max-w-xl text-muted-foreground text-sm leading-6">
+                {createdProduct.imageUploaded
+                  ? "Image saved. You can replace it later from the product row."
+                  : "Use the image button to add a file now, or upload it later from the product row."}
+              </p>
+            </div>
           </div>
-        ))}
-      </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <ProductImageUpload
+              onComplete={async () => {
+                await router.invalidate();
+                setCreatedProduct((current) =>
+                  current ? { ...current, imageUploaded: true } : current
+                );
+              }}
+              productId={createdProduct.id}
+              productName={createdProduct.name}
+            />
+            <Button
+              onClick={() => setCreatedProduct(null)}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              Done
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {rows.length > 0 ? (
+        <div className="mt-8">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-20">
+                  <span className="sr-only">Image</span>
+                </TableHead>
+                <TableHead>Product</TableHead>
+                <TableHead>Price</TableHead>
+                <TableHead>Stock</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map(({ imageUrl, product }) => (
+                <Fragment key={product.id}>
+                  <TableRow>
+                    <TableCell className="w-20">
+                      <div className="size-16 overflow-hidden rounded-xl bg-muted">
+                        {imageUrl ? (
+                          <img
+                            alt=""
+                            className="size-full object-cover"
+                            src={imageUrl}
+                          />
+                        ) : (
+                          <div className="flex size-full flex-col items-center justify-center gap-1 text-muted-foreground text-[10px]">
+                            <ImagePlus aria-hidden="true" className="size-4" />
+                            <span>No image</span>
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="min-w-52">
+                      <p className="font-medium">{product.name}</p>
+                      <p className="mt-1 text-muted-foreground text-sm">
+                        {product.slug}
+                      </p>
+                    </TableCell>
+                    <TableCell>{formatIdr(product.price)}</TableCell>
+                    <TableCell>{product.availableStock}</TableCell>
+                    <TableCell>
+                      {product.status === "active" ? (
+                        <Badge variant="outline">Active</Badge>
+                      ) : (
+                        <Badge variant="secondary">Archived</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        {product.status === "active" ? (
+                          <>
+                            <Button
+                              aria-label={`Edit ${product.name}`}
+                              onClick={() =>
+                                setEditingId((current) =>
+                                  current === product.id ? null : product.id
+                                )
+                              }
+                              size="icon"
+                              variant="ghost"
+                            >
+                              <Pencil aria-hidden="true" />
+                            </Button>
+                            <ProductImageUpload
+                              onComplete={() => router.invalidate()}
+                              productId={product.id}
+                              productName={product.name}
+                            />
+                            <Button
+                              aria-label={`Archive ${product.name}`}
+                              onClick={() => archive(product.id)}
+                              size="icon"
+                              variant="ghost"
+                            >
+                              <Archive aria-hidden="true" />
+                            </Button>
+                          </>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                  {editingId === product.id ? (
+                    <TableRow>
+                      <TableCell className="p-2" colSpan={6}>
+                        <ProductEditForm
+                          categories={categories}
+                          onSaved={async () => {
+                            setEditingId(null);
+                            await router.invalidate();
+                          }}
+                          product={product}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </Fragment>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      ) : (
+        <Empty className="mt-8 min-h-48">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <ImagePlus aria-hidden="true" />
+            </EmptyMedia>
+            <EmptyTitle>No products yet</EmptyTitle>
+            <EmptyDescription>
+              Add your first product using the form above.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      )}
     </section>
   );
 }
@@ -355,80 +609,88 @@ function ProductEditForm({
   return (
     <form className="mt-5 rounded-2xl bg-muted/60 p-4" onSubmit={submit}>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Input defaultValue={product.name} name="name" required />
-        <Input defaultValue={product.slug} name="slug" required />
-        <Input
-          defaultValue={product.price}
-          min={0}
-          name="price"
-          required
-          type="number"
-        />
-        <Input
-          defaultValue={product.availableStock}
-          min={0}
-          name="stock"
-          required
-          type="number"
-        />
-        <select
-          aria-label="Category"
-          className="h-9 rounded-xl border border-input bg-background px-3 text-sm"
-          defaultValue={product.categoryId ?? ""}
-          name="categoryId"
-        >
-          <option value="">No category</option>
-          {categories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-            </option>
-          ))}
-        </select>
-        <Textarea
-          className="sm:col-span-2"
-          defaultValue={product.description}
-          name="description"
-          required
-        />
+        <Field>
+          <FieldLabel htmlFor={`edit-name-${product.id}`}>Name</FieldLabel>
+          <Input
+            defaultValue={product.name}
+            id={`edit-name-${product.id}`}
+            name="name"
+            required
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={`edit-slug-${product.id}`}>Slug</FieldLabel>
+          <Input
+            defaultValue={product.slug}
+            id={`edit-slug-${product.id}`}
+            name="slug"
+            required
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={`edit-price-${product.id}`}>
+            Price in IDR
+          </FieldLabel>
+          <Input
+            defaultValue={product.price}
+            id={`edit-price-${product.id}`}
+            min={0}
+            name="price"
+            required
+            type="number"
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={`edit-stock-${product.id}`}>
+            Available stock
+          </FieldLabel>
+          <Input
+            defaultValue={product.availableStock}
+            id={`edit-stock-${product.id}`}
+            min={0}
+            name="stock"
+            required
+            type="number"
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={`edit-category-${product.id}`}>
+            Category
+          </FieldLabel>
+          <NativeSelect
+            className="w-full"
+            defaultValue={product.categoryId ?? ""}
+            id={`edit-category-${product.id}`}
+            name="categoryId"
+          >
+            <NativeSelectOption value="">No category</NativeSelectOption>
+            {categories.map((category) => (
+              <NativeSelectOption key={category.id} value={category.id}>
+                {category.name}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </Field>
+        <Field className="sm:col-span-2">
+          <FieldLabel htmlFor={`edit-description-${product.id}`}>
+            Description
+          </FieldLabel>
+          <Textarea
+            defaultValue={product.description}
+            id={`edit-description-${product.id}`}
+            name="description"
+            required
+          />
+        </Field>
       </div>
       {error ? (
-        <p className="mt-3 text-destructive text-sm" role="alert">
-          {error}
-        </p>
+        <Alert className="mt-3" variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       ) : null}
       <Button className="mt-4 rounded-full" disabled={submitting} type="submit">
         {submitting ? "Saving changes" : "Save changes"}
       </Button>
     </form>
-  );
-}
-
-function Field({
-  label,
-  min,
-  name,
-  pattern,
-  required = false,
-  type = "text",
-}: {
-  label: string;
-  min?: number;
-  name: string;
-  pattern?: string;
-  required?: boolean;
-  type?: string;
-}) {
-  return (
-    <label className="space-y-2" htmlFor={name}>
-      <span className="text-sm">{label}</span>
-      <Input
-        id={name}
-        min={min}
-        name={name}
-        pattern={pattern}
-        required={required}
-        type={type}
-      />
-    </label>
   );
 }

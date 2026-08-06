@@ -8,6 +8,12 @@ import { LayoutDashboard, Package, ShoppingCart } from "lucide-react";
 
 import { ensureAdmin } from "@/lib/auth.functions";
 
+const adminNavItems = [
+  { icon: LayoutDashboard, label: "Overview", to: "/admin" },
+  { icon: Package, label: "Products", to: "/admin/products" },
+  { icon: ShoppingCart, label: "Orders", to: "/admin/orders" },
+] as const;
+
 export const Route = createFileRoute("/admin")({
   beforeLoad: async () => {
     try {
@@ -29,43 +35,21 @@ function AdminLayout() {
           Admin
         </h1>
         <nav aria-label="Admin navigation" className="mt-7 grid gap-1">
-          <AdminLink icon={<LayoutDashboard aria-hidden="true" />} to="/admin">
-            Overview
-          </AdminLink>
-          <AdminLink icon={<Package aria-hidden="true" />} to="/admin/products">
-            Products
-          </AdminLink>
-          <AdminLink
-            icon={<ShoppingCart aria-hidden="true" />}
-            to="/admin/orders"
-          >
-            Orders
-          </AdminLink>
+          {adminNavItems.map(({ icon: Icon, label, to }) => (
+            <Link
+              className="inline-flex min-h-11 items-center gap-3 rounded-xl px-3 text-muted-foreground text-sm transition-colors hover:bg-muted hover:text-foreground [&.active]:bg-muted [&.active]:text-foreground"
+              key={to}
+              to={to}
+            >
+              <Icon aria-hidden="true" className="size-4" />
+              {label}
+            </Link>
+          ))}
         </nav>
       </aside>
       <div className="min-w-0 flex-1">
         <Outlet />
       </div>
     </main>
-  );
-}
-
-function AdminLink({
-  children,
-  icon,
-  to,
-}: {
-  children: React.ReactNode;
-  icon: React.ReactNode;
-  to: string;
-}) {
-  return (
-    <Link
-      className="inline-flex min-h-11 items-center gap-3 rounded-xl px-3 text-muted-foreground text-sm transition-colors hover:bg-muted hover:text-foreground [&.active]:bg-muted [&.active]:text-foreground"
-      to={to}
-    >
-      <span className="[&_svg]:size-4">{icon}</span>
-      {children}
-    </Link>
   );
 }

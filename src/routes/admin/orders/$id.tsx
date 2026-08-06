@@ -1,7 +1,20 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, LoaderCircle, RefreshCw } from "lucide-react";
 import { useState } from "react";
+
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   getAdminOrder,
   markOrderRefunded,
@@ -168,105 +181,161 @@ function AdminOrderDetail() {
         </p>
       ) : null}
       {error ? (
-        <p className="mt-4 text-destructive text-sm" role="alert">
-          {error}
-        </p>
+        <Alert className="mt-4" variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       ) : null}
 
       <div className="mt-8 grid gap-4 md:grid-cols-2">
-        <section className="rounded-3xl border p-6">
-          <h3 className="font-medium">Customer and shipping</h3>
-          <address className="mt-4 text-muted-foreground text-sm not-italic leading-6">
-            {order.guestName}
-            <br />
-            {order.guestEmail}
-            <br />
-            {order.guestPhone}
-            <br />
-            <br />
-            {order.addressLine}
-            <br />
-            {order.city}, {order.province} {order.postalCode}
-          </address>
-        </section>
-        <section className="rounded-3xl border p-6">
-          <h3 className="font-medium">Payment</h3>
-          <dl className="mt-4 grid gap-3 text-sm">
-            <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">Status</dt>
-              <dd>{formatOrderStatus(order.paymentStatus)}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">Amount</dt>
-              <dd>{formatIdr(order.total)}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">Transaction</dt>
-              <dd className="max-w-[14rem] truncate">
-                {order.mayarTransactionId ?? "Pending"}
-              </dd>
-            </div>
-          </dl>
-        </section>
+        <Card className="rounded-3xl border bg-transparent shadow-none ring-0">
+          <CardHeader className="p-6 pb-0">
+            <CardTitle>Customer and shipping</CardTitle>
+          </CardHeader>
+          <CardContent className="p-6 pt-4">
+            <address className="text-muted-foreground text-sm not-italic leading-6">
+              {order.guestName}
+              <br />
+              {order.guestEmail}
+              <br />
+              {order.guestPhone}
+              <br />
+              <br />
+              {order.addressLine}
+              <br />
+              {order.city}, {order.province} {order.postalCode}
+            </address>
+          </CardContent>
+        </Card>
+        <Card className="rounded-3xl border bg-transparent shadow-none ring-0">
+          <CardHeader className="p-6 pb-0">
+            <CardTitle>Payment</CardTitle>
+          </CardHeader>
+          <CardContent className="p-6 pt-4">
+            <dl className="grid gap-3 text-sm">
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Status</dt>
+                <dd>
+                  <Badge variant="secondary">
+                    {formatOrderStatus(order.paymentStatus)}
+                  </Badge>
+                </dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Amount</dt>
+                <dd>{formatIdr(order.total)}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Transaction</dt>
+                <dd className="max-w-[14rem] truncate">
+                  {order.mayarTransactionId ?? "Pending"}
+                </dd>
+              </div>
+            </dl>
+          </CardContent>
+        </Card>
       </div>
 
-      <section className="mt-8 rounded-3xl border p-6">
-        <h3 className="font-medium">Items</h3>
-        <div className="mt-4 divide-y">
-          {items.map((item) => (
-            <div
-              className="flex justify-between gap-4 py-3 text-sm"
-              key={item.id}
-            >
-              <span>
-                {item.productName} × {item.quantity}
-              </span>
-              <span>{formatIdr(item.lineTotal)}</span>
-            </div>
-          ))}
-        </div>
-        <div className="mt-4 flex justify-between border-t pt-4 font-medium text-sm">
-          <span>Total</span>
-          <span>{formatIdr(order.total)}</span>
-        </div>
-      </section>
+      <Card className="mt-8 rounded-3xl border bg-transparent shadow-none ring-0">
+        <CardHeader className="p-6 pb-0">
+          <CardTitle>Items</CardTitle>
+        </CardHeader>
+        <CardContent className="p-6 pt-4">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Item</TableHead>
+                <TableHead className="text-right">Line total</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell>
+                    {item.productName} × {item.quantity}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {formatIdr(item.lineTotal)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+            <TableFooter>
+              <TableRow>
+                <TableCell>Total</TableCell>
+                <TableCell className="text-right">
+                  {formatIdr(order.total)}
+                </TableCell>
+              </TableRow>
+            </TableFooter>
+          </Table>
+        </CardContent>
+      </Card>
 
-      <section className="mt-8 rounded-3xl border p-6">
-        <h3 className="font-medium">Payment attempts</h3>
-        {attempts.length > 0 ? (
-          <div className="mt-4 divide-y text-sm">
-            {attempts.map((attempt) => (
-              <div
-                className="flex flex-wrap justify-between gap-3 py-3"
-                key={attempt.id}
-              >
-                <span className="text-muted-foreground">
-                  {attempt.invoiceId}
-                </span>
-                <span>{formatOrderStatus(attempt.status)}</span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="mt-3 text-muted-foreground text-sm">
-            No payment attempt recorded.
-          </p>
-        )}
-      </section>
+      <Card className="mt-8 rounded-3xl border bg-transparent shadow-none ring-0">
+        <CardHeader className="p-6 pb-0">
+          <CardTitle>Payment attempts</CardTitle>
+        </CardHeader>
+        <CardContent className="p-6 pt-4">
+          {attempts.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Invoice</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {attempts.map((attempt) => (
+                  <TableRow key={attempt.id}>
+                    <TableCell className="text-muted-foreground">
+                      {attempt.invoiceId}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">
+                        {formatOrderStatus(attempt.status)}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              No payment attempt recorded.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
-      <section className="mt-8 rounded-3xl border p-6">
-        <h3 className="font-medium">Status history</h3>
-        <div className="mt-4 divide-y text-sm">
-          {history.map((entry) => (
-            <div className="py-3" key={entry.id}>
-              <p>{formatOrderStatus(entry.toStatus)}</p>
-              <p className="mt-1 text-muted-foreground">
-                {entry.note ?? "Status updated"}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
+      <Card className="mt-8 rounded-3xl border bg-transparent shadow-none ring-0">
+        <CardHeader className="p-6 pb-0">
+          <CardTitle>Status history</CardTitle>
+        </CardHeader>
+        <CardContent className="p-6 pt-4">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Status</TableHead>
+                <TableHead>Note</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {history.map((entry) => (
+                <TableRow key={entry.id}>
+                  <TableCell>
+                    <Badge variant="secondary">
+                      {formatOrderStatus(entry.toStatus)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {entry.note ?? "Status updated"}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </section>
   );
 }
