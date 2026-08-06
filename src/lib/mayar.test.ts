@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { isMayarPaid, parseMayarWebhook } from "./mayar";
+import {
+  createMayarVerificationPayload,
+  isMayarPaid,
+  parseMayarWebhook,
+} from "./mayar";
 
 describe("Mayar webhook parsing", () => {
   it("reads the documented event and transaction candidate fields", () => {
@@ -34,5 +38,18 @@ describe("Mayar webhook parsing", () => {
 
     expect(webhook.status).toBe("created");
     expect(isMayarPaid(webhook.status)).toBe(false);
+  });
+
+  it("keeps reconciliation event ids separate from transaction ids", () => {
+    const webhook = parseMayarWebhook(
+      createMayarVerificationPayload("reconciliation-event-id", {
+        amount: 189_000,
+        id: "transaction-id",
+        status: "paid",
+      })
+    );
+
+    expect(webhook.id).toBe("reconciliation-event-id");
+    expect(webhook.transactionId).toBe("transaction-id");
   });
 });

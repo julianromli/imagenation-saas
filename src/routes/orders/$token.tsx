@@ -13,6 +13,7 @@ import {
 import { saveLastOrderHint } from "@/lib/order-access";
 
 const statuses = ["paid", "processing", "shipped", "delivered"] as const;
+const paymentRefreshRetryDelays = [5000, 15_000, 30_000, 60_000] as const;
 
 export const Route = createFileRoute("/orders/$token")({
   component: OrderStatusPage,
@@ -90,8 +91,36 @@ function OrderStatusPage() {
   }, [order.orderNumber, statusPath]);
 
   useEffect(() => {
+    if (order.status !== "pending_payment") {
+      return;
+    }
+
     refreshPayment(true).catch(() => undefined);
-  }, [refreshPayment]);
+    const retryTimers = paymentRefreshRetryDelays.map((delay) =>
+      window.setTimeout(() => {
+        refreshPayment(true).catch(() => undefined);
+      }, delay)
+    );
+    const refreshOnFocus = () => {
+      refreshPayment(true).catch(() => undefined);
+    };
+    const refreshOnVisibility = () => {
+      if (document.visibilityState === "visible") {
+        refreshPayment(true).catch(() => undefined);
+      }
+    };
+
+    window.addEventListener("focus", refreshOnFocus);
+    document.addEventListener("visibilitychange", refreshOnVisibility);
+
+    return () => {
+      for (const timer of retryTimers) {
+        window.clearTimeout(timer);
+      }
+      window.removeEventListener("focus", refreshOnFocus);
+      document.removeEventListener("visibilitychange", refreshOnVisibility);
+    };
+  }, [order.status, refreshPayment]);
 
   async function claim() {
     setClaiming(true);

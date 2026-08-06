@@ -16,7 +16,10 @@ import {
 } from "@/db/schema";
 import { ensureAdmin } from "@/lib/auth.functions";
 import { createId } from "@/lib/ids";
-import { getMayarTransaction } from "@/lib/mayar";
+import {
+  createMayarVerificationPayload,
+  getMayarTransaction,
+} from "@/lib/mayar";
 import { processMayarWebhook } from "@/lib/payment.functions";
 import { productInputSchema, statusUpdateSchema } from "@/lib/validation";
 
@@ -69,7 +72,7 @@ export const getAdminProducts = createServerFn({ method: "GET" }).handler(
 );
 
 export const createProduct = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => productInputSchema.parse(data))
+  .validator((data: unknown) => productInputSchema.parse(data))
   .handler(async ({ data }) => {
     await ensureAdmin();
     const db = getDb();
@@ -90,7 +93,7 @@ export const createProduct = createServerFn({ method: "POST" })
   });
 
 export const createCategory = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) =>
+  .validator((data: unknown) =>
     z
       .object({
         description: z.string().trim().max(500).optional(),
@@ -115,7 +118,7 @@ export const createCategory = createServerFn({ method: "POST" })
   });
 
 export const deleteCategory = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }) => {
     await ensureAdmin();
 
@@ -123,7 +126,7 @@ export const deleteCategory = createServerFn({ method: "POST" })
   });
 
 export const updateProduct = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) =>
+  .validator((data: unknown) =>
     productInputSchema.extend({ id: z.string().min(1) }).parse(data)
   )
   .handler(async ({ data }) => {
@@ -147,7 +150,7 @@ export const updateProduct = createServerFn({ method: "POST" })
   });
 
 export const archiveProduct = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }) => {
     await ensureAdmin();
 
@@ -158,7 +161,7 @@ export const archiveProduct = createServerFn({ method: "POST" })
   });
 
 export const setProductImage = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) =>
+  .validator((data: unknown) =>
     z
       .object({
         alt: z.string().trim().min(1).max(160),
@@ -197,7 +200,7 @@ export const getAdminOrders = createServerFn({ method: "GET" }).handler(
 );
 
 export const getAdminOrder = createServerFn({ method: "GET" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }) => {
     await ensureAdmin();
     const db = getDb();
@@ -229,7 +232,7 @@ export const getAdminOrder = createServerFn({ method: "GET" })
   });
 
 export const updateOrderStatus = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => statusUpdateSchema.parse(data))
+  .validator((data: unknown) => statusUpdateSchema.parse(data))
   .handler(async ({ data }) => {
     const session = await ensureAdmin();
 
@@ -270,7 +273,7 @@ export const updateOrderStatus = createServerFn({ method: "POST" })
   });
 
 export const resyncOrderPayment = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }) => {
     await ensureAdmin();
     const [order] = await getDb()
@@ -289,22 +292,16 @@ export const resyncOrderPayment = createServerFn({ method: "POST" })
     const transaction = await getMayarTransaction(order.transactionId);
 
     return processMayarWebhook(
-      {
-        data: {
-          amount: transaction.amount,
-          id: transaction.id,
-          status: transaction.status,
-          transactionId: transaction.id,
-        },
-        eventType: "payment.received",
-        id: `admin-resync-${order.id}-${Date.now()}`,
-      },
+      createMayarVerificationPayload(
+        `admin-resync-${order.id}-${Date.now()}`,
+        transaction
+      ),
       { verifiedTransactionId: transaction.id }
     );
   });
 
 export const markOrderRefunded = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string; reason?: string }) => data)
+  .validator((data: { id: string; reason?: string }) => data)
   .handler(async ({ data }) => {
     const session = await ensureAdmin();
 

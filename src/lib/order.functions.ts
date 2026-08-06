@@ -21,7 +21,11 @@ import {
   releaseExpiredReservations,
   releaseOrderReservation,
 } from "@/lib/inventory";
-import { createMayarInvoice, getMayarTransaction } from "@/lib/mayar";
+import {
+  createMayarInvoice,
+  createMayarVerificationPayload,
+  getMayarTransaction,
+} from "@/lib/mayar";
 import { processMayarWebhook } from "@/lib/payment.functions";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import {
@@ -82,7 +86,7 @@ async function requireMatchingGuestOrder(orderId: string, email: string) {
 }
 
 export const createOrder = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => checkoutSchema.parse(data))
+  .validator((data: unknown) => checkoutSchema.parse(data))
   .handler(({ data }) => createOrderForCheckout(data));
 
 export async function createOrderForCheckout(data: CheckoutInput) {
@@ -291,7 +295,7 @@ export async function createOrderForCheckout(data: CheckoutInput) {
 }
 
 export const getOrderByAccessToken = createServerFn({ method: "GET" })
-  .inputValidator((data: { token: string }) => data)
+  .validator((data: { token: string }) => data)
   .handler(async ({ data }) => {
     const tokenHash = await hashToken(data.token);
     const db = getDb();
@@ -335,6 +339,37 @@ export const getMyOrders = createServerFn({ method: "GET" }).handler(
   }
 );
 
+export const getMyOrderById = createServerFn({ method: "GET" })
+  .validator((data: { orderId: string }) => data)
+  .handler(async ({ data }) => {
+    const session = await getSession();
+
+    if (!session) {
+      throw new Error("Unauthorized");
+    }
+
+    const db = getDb();
+    const [order] = await db
+      .select()
+      .from(orders)
+      .where(
+        and(eq(orders.id, data.orderId), eq(orders.userId, session.user.id))
+      )
+      .limit(1);
+
+    if (!order) {
+      throw new Error("Order not found");
+    }
+
+    const items = await db
+      .select()
+      .from(orderItems)
+      .where(eq(orderItems.orderId, order.id))
+      .orderBy(asc(orderItems.createdAt));
+
+    return { items, order };
+  });
+
 export const getClaimableGuestOrders = createServerFn({
   method: "GET",
 }).handler(async () => {
@@ -363,7 +398,7 @@ export const getClaimableGuestOrders = createServerFn({
 });
 
 export const claimOrder = createServerFn({ method: "POST" })
-  .inputValidator((data: { token: string }) => data)
+  .validator((data: { token: string }) => data)
   .handler(async ({ data }) => {
     const session = await getSession();
 
@@ -398,7 +433,7 @@ export const claimOrder = createServerFn({ method: "POST" })
   });
 
 export const claimGuestOrderById = createServerFn({ method: "POST" })
-  .inputValidator((data: { orderId: string }) => data)
+  .validator((data: { orderId: string }) => data)
   .handler(async ({ data }) => {
     const session = await getSession();
 
@@ -426,7 +461,7 @@ export const claimGuestOrderById = createServerFn({ method: "POST" })
   });
 
 export const openClaimableGuestOrder = createServerFn({ method: "POST" })
-  .inputValidator((data: { orderId: string }) => data)
+  .validator((data: { orderId: string }) => data)
   .handler(async ({ data }) => {
     const session = await getSession();
 
@@ -466,7 +501,7 @@ export const openClaimableGuestOrder = createServerFn({ method: "POST" })
   });
 
 export const findOrderAccess = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => orderLookupSchema.parse(data))
+  .validator((data: unknown) => orderLookupSchema.parse(data))
   .handler(async ({ data }) => {
     const email = data.email.trim().toLowerCase();
     const orderNumber = data.orderNumber.trim().toUpperCase();
@@ -513,7 +548,7 @@ export const findOrderAccess = createServerFn({ method: "POST" })
   });
 
 export const refreshOrderPayment = createServerFn({ method: "POST" })
-  .inputValidator((data: { token: string }) => data)
+  .validator((data: { token: string }) => data)
   .handler(async ({ data }) => {
     const tokenHash = await hashToken(data.token);
 
@@ -555,16 +590,10 @@ export const refreshOrderPayment = createServerFn({ method: "POST" })
     const transaction = await getMayarTransaction(order.transactionId);
 
     const result = await processMayarWebhook(
-      {
-        data: {
-          amount: transaction.amount,
-          id: transaction.id,
-          status: transaction.status,
-          transactionId: transaction.id,
-        },
-        eventType: "payment.received",
-        id: `customer-refresh-${order.id}-${Date.now()}`,
-      },
+      createMayarVerificationPayload(
+        `customer-refresh-${order.id}-${Date.now()}`,
+        transaction
+      ),
       { verifiedTransactionId: transaction.id }
     );
 

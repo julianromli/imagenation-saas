@@ -1,6 +1,6 @@
 import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
 
-import { withTransaction } from "@/db";
+import { getDb, withTransaction } from "@/db";
 import {
   inventoryReservations,
   orderStatusHistory,
@@ -13,6 +13,7 @@ import { createId } from "@/lib/ids";
 import {
   getMayarTransaction,
   isMayarPaid,
+  type MayarWebhook,
   parseMayarWebhook,
 } from "@/lib/mayar";
 
@@ -22,10 +23,64 @@ type ProcessOptions = {
   verifiedTransactionId?: string;
 };
 
+type ClaimOptions = {
+  allowIgnored?: boolean;
+};
+
 function objectValue(value: unknown) {
   return typeof value === "object" && value !== null
     ? (value as Record<string, unknown>)
     : {};
+}
+
+async function findVerifiedTransactionForWebhook(webhook: MayarWebhook) {
+  const data = objectValue(webhook.payload.data);
+  const customerEmail =
+    typeof data.customerEmail === "string"
+      ? data.customerEmail.trim().toLowerCase()
+      : null;
+  const amount = typeof data.amount === "number" ? data.amount : null;
+
+  if (!customerEmail || amount === null) {
+    return null;
+  }
+
+  const candidates = await getDb()
+    .select({
+      id: orders.id,
+      mayarTransactionId: orders.mayarTransactionId,
+      total: orders.total,
+    })
+    .from(orders)
+    .where(
+      and(
+        eq(orders.paymentStatus, "pending"),
+        eq(orders.status, "pending_payment"),
+        eq(orders.total, amount),
+        sql`lower(${orders.guestEmail}) = ${customerEmail}`
+      )
+    )
+    .limit(20);
+
+  for (const candidate of candidates) {
+    if (!candidate.mayarTransactionId) {
+      continue;
+    }
+
+    // biome-ignore lint/performance/noAwaitInLoops: Stop after the first verified candidate to limit provider calls.
+    const transaction = await getMayarTransaction(candidate.mayarTransactionId);
+    const extraData = objectValue(transaction.extraData);
+
+    if (
+      transaction.amount === candidate.total &&
+      isMayarPaid(transaction.status) &&
+      extraData.orderId === candidate.id
+    ) {
+      return transaction;
+    }
+  }
+
+  return null;
 }
 
 async function markWebhookFailure(id: string, error: unknown) {
@@ -57,9 +112,22 @@ async function markWebhookIgnored(id: string, reason: string) {
   });
 }
 
-function claimWebhookEvent(providerEventId: string, eventId: string) {
+function claimWebhookEvent(
+  providerEventId: string,
+  eventId: string,
+  options: ClaimOptions = {}
+) {
   const now = new Date();
   const lockedUntil = new Date(now.getTime() + CLAIM_LEASE_MS);
+  const claimableStatuses = [
+    eq(webhookEvents.status, "received"),
+    eq(webhookEvents.status, "failed"),
+    ...(options.allowIgnored ? [eq(webhookEvents.status, "ignored")] : []),
+    and(
+      eq(webhookEvents.status, "processing"),
+      or(isNull(webhookEvents.lockedUntil), lt(webhookEvents.lockedUntil, now))
+    ),
+  ];
 
   return withTransaction(async (transaction) => {
     const [claimed] = await transaction
@@ -71,22 +139,7 @@ function claimWebhookEvent(providerEventId: string, eventId: string) {
         status: "processing",
         updatedAt: now,
       })
-      .where(
-        and(
-          eq(webhookEvents.id, eventId),
-          or(
-            eq(webhookEvents.status, "received"),
-            eq(webhookEvents.status, "failed"),
-            and(
-              eq(webhookEvents.status, "processing"),
-              or(
-                isNull(webhookEvents.lockedUntil),
-                lt(webhookEvents.lockedUntil, now)
-              )
-            )
-          )
-        )
-      )
+      .where(and(eq(webhookEvents.id, eventId), or(...claimableStatuses)))
       .returning();
 
     if (claimed) {
@@ -117,6 +170,11 @@ export async function processMayarWebhook(
 ) {
   const webhook = parseMayarWebhook(payload);
   const eventId = webhook.id;
+  const verifiedTransactionId =
+    options.verifiedTransactionId ??
+    (webhook.eventType === "payment.received"
+      ? (await findVerifiedTransactionForWebhook(webhook))?.id
+      : undefined);
   const [event] = await withTransaction(async (transaction) =>
     transaction
       .insert(webhookEvents)
@@ -126,7 +184,7 @@ export async function processMayarWebhook(
         payload: webhook.payload,
         providerEventId: eventId,
         status: "received",
-        transactionId: options.verifiedTransactionId ?? null,
+        transactionId: verifiedTransactionId ?? null,
       })
       .onConflictDoNothing()
       .returning()
@@ -140,10 +198,18 @@ export async function processMayarWebhook(
           .select()
           .from(webhookEvents)
           .where(
-            and(
-              eq(webhookEvents.provider, "mayar"),
-              eq(webhookEvents.providerEventId, eventId)
-            )
+            verifiedTransactionId
+              ? and(
+                  eq(webhookEvents.provider, "mayar"),
+                  or(
+                    eq(webhookEvents.providerEventId, eventId),
+                    eq(webhookEvents.transactionId, verifiedTransactionId)
+                  )
+                )
+              : and(
+                  eq(webhookEvents.provider, "mayar"),
+                  eq(webhookEvents.providerEventId, eventId)
+                )
           )
           .limit(1)
       )
@@ -166,10 +232,10 @@ export async function processMayarWebhook(
     return { duplicate: !event, processed: false };
   }
 
-  if (!options.verifiedTransactionId) {
+  if (!verifiedTransactionId) {
     await markWebhookIgnored(
       eventRecord.id,
-      "Transaction ID mapping is not verified from an actual Mayar payload"
+      "Transaction ID mapping could not be verified from the pending order data"
     );
 
     return {
@@ -179,16 +245,33 @@ export async function processMayarWebhook(
     };
   }
 
-  const claim = await claimWebhookEvent(eventId, eventRecord.id);
+  if (eventRecord.status === "ignored" && verifiedTransactionId) {
+    await withTransaction(async (transaction) => {
+      await transaction
+        .update(webhookEvents)
+        .set({
+          eventType: webhook.eventType,
+          payload: webhook.payload,
+          updatedAt: new Date(),
+        })
+        .where(eq(webhookEvents.id, eventRecord.id));
+    });
+  }
+
+  const claim = await claimWebhookEvent(
+    eventRecord.providerEventId,
+    eventRecord.id,
+    {
+      allowIgnored: Boolean(verifiedTransactionId),
+    }
+  );
 
   if (!claim.claimed || claim.duplicate) {
     return { duplicate: true, processed: false };
   }
 
   try {
-    const transactionDetail = await getMayarTransaction(
-      options.verifiedTransactionId
-    );
+    const transactionDetail = await getMayarTransaction(verifiedTransactionId);
     const extraData = objectValue(transactionDetail.extraData);
     const orderId =
       typeof extraData.orderId === "string" ? extraData.orderId : undefined;

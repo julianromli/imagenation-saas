@@ -16,6 +16,7 @@ import { Route as CartRouteImport } from './routes/cart'
 import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SignUpRouteImport } from './routes/sign-up'
+import { Route as AccountIndexRouteImport } from './routes/account/index'
 import { Route as AccountOrdersRouteImport } from './routes/account/orders'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminOrdersRouteImport } from './routes/admin/orders'
@@ -30,6 +31,8 @@ import { Route as OrdersTokenRouteImport } from './routes/orders/$token'
 import { Route as OrdersFindRouteImport } from './routes/orders/find'
 import { Route as ProductsIndexRouteImport } from './routes/products/index'
 import { Route as ProductsSlugRouteImport } from './routes/products/$slug'
+import { Route as AccountOrdersIndexRouteImport } from './routes/account/orders/index'
+import { Route as AccountOrdersIdRouteImport } from './routes/account/orders/$id'
 import { Route as AdminOrdersIdRouteImport } from './routes/admin/orders/$id'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiWebhooksMayarRouteImport } from './routes/api/webhooks/mayar'
@@ -68,6 +71,11 @@ const SignUpRoute = SignUpRouteImport.update({
   id: '/sign-up',
   path: '/sign-up',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AccountIndexRoute = AccountIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AccountRoute,
 } as any)
 const AccountOrdersRoute = AccountOrdersRouteImport.update({
   id: '/orders',
@@ -139,6 +147,16 @@ const ProductsSlugRoute = ProductsSlugRouteImport.update({
   path: '/products/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AccountOrdersIndexRoute = AccountOrdersIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AccountOrdersRoute,
+} as any)
+const AccountOrdersIdRoute = AccountOrdersIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AccountOrdersRoute,
+} as any)
 const AdminOrdersIdRoute = AdminOrdersIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -163,7 +181,7 @@ export interface FileRoutesByFullPath {
   '/checkout': typeof CheckoutRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
-  '/account/orders': typeof AccountOrdersRoute
+  '/account/orders': typeof AccountOrdersRouteWithChildren
   '/admin/orders': typeof AdminOrdersRouteWithChildren
   '/admin/products': typeof AdminProductsRoute
   '/api/checkout': typeof ApiCheckoutRoute
@@ -175,20 +193,21 @@ export interface FileRoutesByFullPath {
   '/orders/$token': typeof OrdersTokenRoute
   '/orders/find': typeof OrdersFindRoute
   '/products/$slug': typeof ProductsSlugRoute
+  '/account/': typeof AccountIndexRoute
   '/admin/': typeof AdminIndexRoute
   '/products/': typeof ProductsIndexRoute
+  '/account/orders/$id': typeof AccountOrdersIdRoute
   '/admin/orders/$id': typeof AdminOrdersIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/webhooks/mayar': typeof ApiWebhooksMayarRoute
+  '/account/orders/': typeof AccountOrdersIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/account': typeof AccountRouteWithChildren
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
-  '/account/orders': typeof AccountOrdersRoute
   '/admin/orders': typeof AdminOrdersRouteWithChildren
   '/admin/products': typeof AdminProductsRoute
   '/api/checkout': typeof ApiCheckoutRoute
@@ -200,11 +219,14 @@ export interface FileRoutesByTo {
   '/orders/$token': typeof OrdersTokenRoute
   '/orders/find': typeof OrdersFindRoute
   '/products/$slug': typeof ProductsSlugRoute
+  '/account': typeof AccountIndexRoute
   '/admin': typeof AdminIndexRoute
   '/products': typeof ProductsIndexRoute
+  '/account/orders/$id': typeof AccountOrdersIdRoute
   '/admin/orders/$id': typeof AdminOrdersIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/webhooks/mayar': typeof ApiWebhooksMayarRoute
+  '/account/orders': typeof AccountOrdersIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -215,7 +237,7 @@ export interface FileRoutesById {
   '/checkout': typeof CheckoutRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
-  '/account/orders': typeof AccountOrdersRoute
+  '/account/orders': typeof AccountOrdersRouteWithChildren
   '/admin/orders': typeof AdminOrdersRouteWithChildren
   '/admin/products': typeof AdminProductsRoute
   '/api/checkout': typeof ApiCheckoutRoute
@@ -227,11 +249,14 @@ export interface FileRoutesById {
   '/orders/$token': typeof OrdersTokenRoute
   '/orders/find': typeof OrdersFindRoute
   '/products/$slug': typeof ProductsSlugRoute
+  '/account/': typeof AccountIndexRoute
   '/admin/': typeof AdminIndexRoute
   '/products/': typeof ProductsIndexRoute
+  '/account/orders/$id': typeof AccountOrdersIdRoute
   '/admin/orders/$id': typeof AdminOrdersIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/webhooks/mayar': typeof ApiWebhooksMayarRoute
+  '/account/orders/': typeof AccountOrdersIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -255,20 +280,21 @@ export interface FileRouteTypes {
     | '/orders/$token'
     | '/orders/find'
     | '/products/$slug'
+    | '/account/'
     | '/admin/'
     | '/products/'
+    | '/account/orders/$id'
     | '/admin/orders/$id'
     | '/api/auth/$'
     | '/api/webhooks/mayar'
+    | '/account/orders/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/account'
     | '/cart'
     | '/checkout'
     | '/sign-in'
     | '/sign-up'
-    | '/account/orders'
     | '/admin/orders'
     | '/admin/products'
     | '/api/checkout'
@@ -280,11 +306,14 @@ export interface FileRouteTypes {
     | '/orders/$token'
     | '/orders/find'
     | '/products/$slug'
+    | '/account'
     | '/admin'
     | '/products'
+    | '/account/orders/$id'
     | '/admin/orders/$id'
     | '/api/auth/$'
     | '/api/webhooks/mayar'
+    | '/account/orders'
   id:
     | '__root__'
     | '/'
@@ -306,11 +335,14 @@ export interface FileRouteTypes {
     | '/orders/$token'
     | '/orders/find'
     | '/products/$slug'
+    | '/account/'
     | '/admin/'
     | '/products/'
+    | '/account/orders/$id'
     | '/admin/orders/$id'
     | '/api/auth/$'
     | '/api/webhooks/mayar'
+    | '/account/orders/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -385,6 +417,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/sign-up'
       preLoaderRoute: typeof SignUpRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/account/': {
+      id: '/account/'
+      path: '/'
+      fullPath: '/account/'
+      preLoaderRoute: typeof AccountIndexRouteImport
+      parentRoute: typeof AccountRoute
     }
     '/account/orders': {
       id: '/account/orders'
@@ -484,6 +523,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProductsSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/account/orders/': {
+      id: '/account/orders/'
+      path: '/'
+      fullPath: '/account/orders/'
+      preLoaderRoute: typeof AccountOrdersIndexRouteImport
+      parentRoute: typeof AccountOrdersRoute
+    }
+    '/account/orders/$id': {
+      id: '/account/orders/$id'
+      path: '/$id'
+      fullPath: '/account/orders/$id'
+      preLoaderRoute: typeof AccountOrdersIdRouteImport
+      parentRoute: typeof AccountOrdersRoute
+    }
     '/admin/orders/$id': {
       id: '/admin/orders/$id'
       path: '/$id'
@@ -508,12 +561,28 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AccountOrdersRouteChildren {
+  AccountOrdersIdRoute: typeof AccountOrdersIdRoute
+  AccountOrdersIndexRoute: typeof AccountOrdersIndexRoute
+}
+
+const AccountOrdersRouteChildren: AccountOrdersRouteChildren = {
+  AccountOrdersIdRoute: AccountOrdersIdRoute,
+  AccountOrdersIndexRoute: AccountOrdersIndexRoute,
+}
+
+const AccountOrdersRouteWithChildren = AccountOrdersRoute._addFileChildren(
+  AccountOrdersRouteChildren,
+)
+
 interface AccountRouteChildren {
-  AccountOrdersRoute: typeof AccountOrdersRoute
+  AccountOrdersRoute: typeof AccountOrdersRouteWithChildren
+  AccountIndexRoute: typeof AccountIndexRoute
 }
 
 const AccountRouteChildren: AccountRouteChildren = {
-  AccountOrdersRoute: AccountOrdersRoute,
+  AccountOrdersRoute: AccountOrdersRouteWithChildren,
+  AccountIndexRoute: AccountIndexRoute,
 }
 
 const AccountRouteWithChildren =

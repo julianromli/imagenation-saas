@@ -66,7 +66,7 @@ export const getServerCart = createServerFn({ method: "GET" }).handler(
 );
 
 export const mergeCart = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => cartLinesSchema.parse(data))
+  .validator((data: unknown) => cartLinesSchema.parse(data))
   .handler(async ({ data }) => {
     const session = await getSession();
 

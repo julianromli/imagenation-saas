@@ -20,7 +20,7 @@ export function SiteHeader() {
   );
 
   return (
-    <header className="border-border/70 border-b bg-background/95 backdrop-blur">
+    <header className="sticky top-0 z-40 border-border/70 border-b bg-background/95 backdrop-blur">
       <div className="mx-auto flex min-h-18 w-full max-w-7xl items-center justify-between gap-6 px-5 sm:px-8">
         <Link
           className="font-heading font-semibold text-lg tracking-[-0.03em]"

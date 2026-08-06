@@ -64,14 +64,17 @@ The application is available at `http://localhost:3000`.
 5. The order status page can refresh payment by fetching the official Mayar
    transaction detail for the stored transaction ID, verifying amount and
    `paid` status, then atomically converting the reservation to sold.
-6. The webhook is stored for audit. Because the official webhook docs do not
-   define a verified transaction-ID mapping for an actual payload, the public
-   webhook fails closed and does not fulfill an order by itself.
-7. Admin payment resync uses the same evidence gate as the customer refresh.
+6. The webhook is stored for audit. If the payload includes the documented
+   customer email and amount, the server finds matching pending orders and
+   verifies the stored transaction detail before fulfillment. Otherwise, it
+   fails closed.
+7. The order status page retries payment checks after load and when the
+   customer returns to the page. The button remains as a manual fallback.
+8. Admin payment resync uses the same evidence gate as the customer refresh.
 
-This limitation is intentional. Do not remove the evidence gate or trust
-`data.id` as a transaction ID without a real Mayar payload that has been
-matched to `GET /transactions/{id}` in the same environment.
+The evidence gate is intentional. Do not trust `data.id` as a transaction ID.
+Only a transaction detail matched to the order in the same environment can
+confirm payment.
 
 Refunds are completed in the Mayar dashboard and then marked as refunded in
 the admin panel. No undocumented refund endpoint is called.
@@ -127,6 +130,8 @@ production database, and register the canonical webhook:
 ```bash
 npx -y mayar@latest webhook register https://your-domain.example/api/webhooks/mayar
 ```
+
+Mayar cannot deliver webhooks to `localhost`. Use the public deployed URL.
 
 Use a sandbox key first. Switch to `MAYAR_ENVIRONMENT=production` only after
 the sandbox flow has been verified.

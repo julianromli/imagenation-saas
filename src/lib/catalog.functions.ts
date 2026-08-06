@@ -27,7 +27,7 @@ export const getCategories = createServerFn({ method: "GET" }).handler(
 );
 
 export const getProducts = createServerFn({ method: "GET" })
-  .inputValidator((data: CatalogFilters = {}) => data)
+  .validator((data: CatalogFilters = {}) => data)
   .handler(async ({ data }) => {
     await releaseExpiredReservations();
     const db = getDb();
@@ -67,7 +67,7 @@ export const getProducts = createServerFn({ method: "GET" })
   });
 
 export const getProductBySlug = createServerFn({ method: "GET" })
-  .inputValidator((slug: string) => slug)
+  .validator((slug: string) => slug)
   .handler(async ({ data: slug }) => {
     await releaseExpiredReservations();
     const db = getDb();

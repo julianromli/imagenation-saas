@@ -116,6 +116,21 @@ export function getMayarTransaction(transactionId: string) {
   );
 }
 
+export function createMayarVerificationPayload(
+  eventId: string,
+  transaction: { amount: number; id: string; status: string }
+) {
+  return {
+    data: {
+      amount: transaction.amount,
+      status: transaction.status,
+      transactionId: transaction.id,
+    },
+    eventType: "payment.received",
+    id: eventId,
+  };
+}
+
 function record(value: unknown): JsonObject {
   return typeof value === "object" && value !== null
     ? (value as JsonObject)
