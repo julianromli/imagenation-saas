@@ -14,7 +14,7 @@ function Home() {
 
   return (
     <main>
-      <section className="mx-auto grid max-w-7xl gap-10 px-5 pt-16 pb-20 sm:px-8 md:grid-cols-[1.2fr_0.8fr] md:items-end md:pt-24">
+      <section className="mx-auto grid max-w-7xl gap-10 px-5 pt-16 pb-20 sm:px-8 md:grid-cols-[1.2fr_0.8fr] md:items-center md:pt-24">
         <div>
           <p className="mb-6 text-muted-foreground text-sm">
             The first collection

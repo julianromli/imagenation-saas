@@ -1,16 +1,25 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 
+import { ClaimableGuestOrders } from "@/components/claimable-guest-orders";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { getSession } from "@/lib/auth.functions";
 import { authClient } from "@/lib/auth-client";
+import { getClaimableGuestOrders } from "@/lib/order.functions";
 
 export const Route = createFileRoute("/account")({
   component: AccountPage,
-  loader: () => getSession(),
+  loader: async () => {
+    const session = await getSession();
+
+    return {
+      claimableOrders: session ? await getClaimableGuestOrders() : [],
+      session,
+    };
+  },
 });
 
 function AccountPage() {
-  const session = Route.useLoaderData();
+  const { claimableOrders, session } = Route.useLoaderData();
   const navigate = useNavigate();
 
   if (!session) {
@@ -44,6 +53,13 @@ function AccountPage() {
       <h1 className="mt-3 font-heading font-medium text-5xl tracking-[-0.06em]">
         Welcome, {session.user.name}.
       </h1>
+
+      {claimableOrders.length > 0 ? (
+        <div className="mt-10">
+          <ClaimableGuestOrders orders={claimableOrders} />
+        </div>
+      ) : null}
+
       <div className="mt-10 grid gap-4 sm:grid-cols-2">
         <Link
           className="rounded-3xl border p-6 transition-colors hover:bg-muted"

@@ -36,7 +36,12 @@ const config = defineConfig({
   ],
   resolve: {
     alias: isCloudflareBuild
-      ? undefined
+      ? {
+          [resolve(import.meta.dirname, "src/lib/cloudflare-env.ts")]: resolve(
+            import.meta.dirname,
+            "src/lib/cloudflare-env.workers.ts"
+          ),
+        }
       : {
           "cloudflare:workers": cloudflareEnvShim,
         },

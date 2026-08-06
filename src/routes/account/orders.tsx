@@ -1,23 +1,31 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 
+import { ClaimableGuestOrders } from "@/components/claimable-guest-orders";
 import { buttonVariants } from "@/components/ui/button";
 import { getSession } from "@/lib/auth.functions";
 import { formatIdr, formatOrderStatus } from "@/lib/format";
-import { getMyOrders } from "@/lib/order.functions";
+import { getClaimableGuestOrders, getMyOrders } from "@/lib/order.functions";
 
 export const Route = createFileRoute("/account/orders")({
   component: AccountOrdersPage,
   loader: async () => {
     const session = await getSession();
 
-    return {
-      orders: session ? await getMyOrders() : null,
-    };
+    if (!session) {
+      return { claimableOrders: [], orders: null };
+    }
+
+    const [orders, claimableOrders] = await Promise.all([
+      getMyOrders(),
+      getClaimableGuestOrders(),
+    ]);
+
+    return { claimableOrders, orders };
   },
 });
 
 function AccountOrdersPage() {
-  const { orders } = Route.useLoaderData();
+  const { claimableOrders, orders } = Route.useLoaderData();
 
   if (!orders) {
     return (
@@ -38,6 +46,13 @@ function AccountOrdersPage() {
       <h1 className="mt-3 font-heading font-medium text-5xl tracking-[-0.06em]">
         Order history
       </h1>
+
+      {claimableOrders.length > 0 ? (
+        <div className="mt-10">
+          <ClaimableGuestOrders orders={claimableOrders} />
+        </div>
+      ) : null}
+
       {orders.length > 0 ? (
         <div className="mt-10 divide-y border-y">
           {orders.map((order) => (
@@ -64,14 +79,18 @@ function AccountOrdersPage() {
         <div className="mt-10 rounded-3xl border border-dashed p-10 text-center">
           <p className="font-medium">No orders yet</p>
           <p className="mt-2 text-muted-foreground text-sm">
-            Your completed orders will appear here.
+            {claimableOrders.length > 0
+              ? "Claim a guest order above to move it into this history."
+              : "Your completed orders will appear here."}
           </p>
-          <Link
-            className={buttonVariants({ className: "mt-6" })}
-            to="/products"
-          >
-            Browse the collection
-          </Link>
+          {claimableOrders.length === 0 ? (
+            <Link
+              className={buttonVariants({ className: "mt-6" })}
+              to="/products"
+            >
+              Browse the collection
+            </Link>
+          ) : null}
         </div>
       )}
     </main>

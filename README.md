@@ -58,14 +58,16 @@ The application is available at `http://localhost:3000`.
 1. The server reads the product and price from Neon.
 2. Checkout reserves available stock for 30 minutes.
 3. The server creates a Mayar invoice from the immutable order snapshot.
-4. The customer opens the invoice URL. A browser return never marks an order
-   paid.
-5. The webhook is stored for audit. Because the official webhook docs do not
+4. The customer opens the invoice URL. After payment, Mayar returns to the
+   order status page when `redirectUrl` is accepted. A browser return never
+   marks an order paid by itself.
+5. The order status page can refresh payment by fetching the official Mayar
+   transaction detail for the stored transaction ID, verifying amount and
+   `paid` status, then atomically converting the reservation to sold.
+6. The webhook is stored for audit. Because the official webhook docs do not
    define a verified transaction-ID mapping for an actual payload, the public
    webhook fails closed and does not fulfill an order by itself.
-6. Admin payment resync uses the transaction ID returned by the server-side
-   invoice creation, fetches the official Mayar transaction detail, verifies
-   amount and `paid` status, and atomically converts the reservation to sold.
+7. Admin payment resync uses the same evidence gate as the customer refresh.
 
 This limitation is intentional. Do not remove the evidence gate or trust
 `data.id` as a transaction ID without a real Mayar payload that has been
@@ -84,7 +86,10 @@ Public:
 - `/cart` — local cart
 - `/checkout` — guest checkout and shipping address
 - `/orders/:token` — signed guest order status
+- `/orders/find` — recover a guest order with email + order number
 - `/sign-in`, `/sign-up`, `/account`, `/account/orders`
+  (`/account` and `/account/orders` prompt to claim guest orders that match
+  the signed-in email)
 - `/legal/privacy`, `/legal/terms`, `/legal/shipping`, `/legal/refund`
 
 Admin:

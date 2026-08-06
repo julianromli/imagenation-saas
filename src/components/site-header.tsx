@@ -1,10 +1,17 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowUpRight, ShoppingBag } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { useCart } from "@/components/cart-provider";
+import { getLastOrderHint, type LastOrderHint } from "@/lib/order-access";
 
 export function SiteHeader() {
   const { count } = useCart();
+  const [lastOrder, setLastOrder] = useState<LastOrderHint | null>(null);
+
+  useEffect(() => {
+    setLastOrder(getLastOrderHint());
+  }, []);
 
   return (
     <header className="border-border/70 border-b bg-background/95 backdrop-blur">
@@ -29,6 +36,12 @@ export function SiteHeader() {
           </Link>
           <Link
             className="transition-colors hover:text-foreground [&.active]:text-foreground"
+            to="/orders/find"
+          >
+            Find order
+          </Link>
+          <Link
+            className="transition-colors hover:text-foreground [&.active]:text-foreground"
             to="/account/orders"
           >
             Orders
@@ -42,6 +55,14 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
+          {lastOrder ? (
+            <a
+              className="hidden min-h-11 items-center rounded-full px-3 text-muted-foreground text-sm transition-colors hover:bg-muted hover:text-foreground sm:inline-flex"
+              href={lastOrder.orderStatusPath}
+            >
+              Continue order
+            </a>
+          ) : null}
           <Link
             aria-label={`Cart with ${count} ${count === 1 ? "item" : "items"}`}
             className="group inline-flex min-h-11 items-center gap-2 rounded-full border border-border px-3 text-sm transition-colors hover:bg-muted"

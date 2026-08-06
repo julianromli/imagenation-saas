@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { checkoutSchema } from "./validation";
+import { checkoutSchema, orderLookupSchema } from "./validation";
 
 describe("checkout validation", () => {
   it("accepts the Indonesia basic shipping shape", () => {
@@ -28,6 +28,26 @@ describe("checkout validation", () => {
       phone: "123",
       postalCode: "12",
       province: "Jakarta",
+    });
+
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("order lookup validation", () => {
+  it("accepts a then. order number", () => {
+    const result = orderLookupSchema.safeParse({
+      email: "customer@example.com",
+      orderNumber: "THN-20260806051753-E99750",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a malformed order number", () => {
+    const result = orderLookupSchema.safeParse({
+      email: "customer@example.com",
+      orderNumber: "ORDER-1",
     });
 
     expect(result.success).toBe(false);

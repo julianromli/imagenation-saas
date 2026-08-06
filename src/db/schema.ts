@@ -406,6 +406,17 @@ export const refunds = pgTable(
   (table) => [index("refund_order_id_idx").on(table.orderId)]
 );
 
+export const rateLimitBuckets = pgTable(
+  "rate_limit_bucket",
+  {
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    id: text("id").primaryKey(),
+    requestCount: integer("request_count").default(0).notNull(),
+    ...timestamps,
+  },
+  (table) => [index("rate_limit_bucket_expiry_idx").on(table.expiresAt)]
+);
+
 export const setupMetadata = pgTable("setup_metadata", {
   id: text("id").primaryKey(),
   key: text("key").notNull(),
@@ -432,6 +443,7 @@ export const schema = {
   paymentAttempts,
   productImages,
   products,
+  rateLimitBuckets,
   refunds,
   setupMetadata,
   webhookEvents,

@@ -48,6 +48,17 @@ export const statusUpdateSchema = z.object({
   ]),
 });
 
+export const orderLookupSchema = z.object({
+  email: z.string().trim().email(),
+  orderNumber: z
+    .string()
+    .trim()
+    .min(8)
+    .max(40)
+    .regex(/^THN-\d{14}-[A-Z0-9]{6}$/i),
+});
+
 export type CartLine = z.infer<typeof cartLineSchema>;
 export type CheckoutInput = z.infer<typeof checkoutSchema>;
+export type OrderLookupInput = z.infer<typeof orderLookupSchema>;
 export type ProductInput = z.infer<typeof productInputSchema>;

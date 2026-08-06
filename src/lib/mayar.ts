@@ -18,6 +18,7 @@ const transactionResponseSchema = z.object({
 });
 
 type InvoiceInput = {
+  description: string;
   email: string;
   expiredAt: string;
   extraData: Record<string, string>;
@@ -28,7 +29,11 @@ type InvoiceInput = {
   }>;
   mobile: string;
   name: string;
-  description: string;
+  /**
+   * Post-payment browser return URL. Official V1 docs document this field.
+   * Sandbox-verified on V2 create: accepted and persisted on the invoice.
+   */
+  redirectUrl?: string;
 };
 
 export type MayarWebhook = {

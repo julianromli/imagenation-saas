@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 
 import { getDb, withTransaction } from "@/db";
 import {
@@ -21,13 +21,25 @@ import {
   releaseExpiredReservations,
   releaseOrderReservation,
 } from "@/lib/inventory";
-import { createMayarInvoice } from "@/lib/mayar";
-import { getRuntimeEnv, getShippingFlatRate } from "@/lib/runtime-env";
+import { createMayarInvoice, getMayarTransaction } from "@/lib/mayar";
+import { processMayarWebhook } from "@/lib/payment.functions";
+import { consumeRateLimit } from "@/lib/rate-limit";
+import {
+  getAppUrl,
+  getRuntimeEnv,
+  getShippingFlatRate,
+} from "@/lib/runtime-env";
 import type { CheckoutInput } from "@/lib/validation";
-import { checkoutSchema } from "@/lib/validation";
+import { checkoutSchema, orderLookupSchema } from "@/lib/validation";
 
 const RESERVATION_MINUTES = 30;
 const ORDER_TOKEN_DAYS = 30;
+const LOOKUP_RATE_LIMIT = 8;
+const LOOKUP_WINDOW_MS = 60_000;
+const REFRESH_RATE_LIMIT = 12;
+const REFRESH_WINDOW_MS = 60_000;
+const CLAIM_RATE_LIMIT = 20;
+const CLAIM_WINDOW_MS = 60_000;
 
 function expiresInMinutes(minutes: number) {
   return new Date(Date.now() + minutes * 60 * 1000);
@@ -35,6 +47,38 @@ function expiresInMinutes(minutes: number) {
 
 function expiresInDays(days: number) {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+}
+
+function orderStatusUrl(accessToken: string) {
+  return `${getAppUrl()}/orders/${accessToken}`;
+}
+
+async function requireMatchingGuestOrder(orderId: string, email: string) {
+  const db = getDb();
+  const [order] = await db
+    .select({
+      guestEmail: orders.guestEmail,
+      id: orders.id,
+      orderNumber: orders.orderNumber,
+      userId: orders.userId,
+    })
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+
+  if (!order) {
+    throw new Error("Order not found");
+  }
+
+  if (order.guestEmail.toLowerCase() !== email.toLowerCase()) {
+    throw new Error("The signed-in email does not match this order");
+  }
+
+  if (order.userId) {
+    throw new Error("This order is already linked to an account");
+  }
+
+  return order;
 }
 
 export const createOrder = createServerFn({ method: "POST" })
@@ -51,6 +95,7 @@ export async function createOrderForCheckout(data: CheckoutInput) {
   const reservationExpiresAt = expiresInMinutes(RESERVATION_MINUTES);
   const accessTokenExpiresAt = expiresInDays(ORDER_TOKEN_DAYS);
   const shippingAmount = getShippingFlatRate();
+  const statusUrl = orderStatusUrl(accessToken);
   const lineIds = [...new Set(data.lines.map((line) => line.productId))];
 
   if (lineIds.length !== data.lines.length) {
@@ -204,6 +249,7 @@ export async function createOrderForCheckout(data: CheckoutInput) {
       ],
       mobile: data.phone,
       name: data.guestName,
+      redirectUrl: statusUrl,
     });
     await withTransaction(async (transaction) => {
       await transaction.insert(paymentAttempts).values({
@@ -234,6 +280,7 @@ export async function createOrderForCheckout(data: CheckoutInput) {
     return {
       accessToken,
       orderNumber: prepared.orderNumber,
+      orderStatusUrl: statusUrl,
       paymentUrl: invoice.link,
       total: prepared.total,
     };
@@ -288,6 +335,33 @@ export const getMyOrders = createServerFn({ method: "GET" }).handler(
   }
 );
 
+export const getClaimableGuestOrders = createServerFn({
+  method: "GET",
+}).handler(async () => {
+  const session = await getSession();
+
+  if (!session) {
+    throw new Error("Unauthorized");
+  }
+
+  const email = session.user.email.trim().toLowerCase();
+
+  return getDb()
+    .select({
+      createdAt: orders.createdAt,
+      id: orders.id,
+      orderNumber: orders.orderNumber,
+      status: orders.status,
+      total: orders.total,
+    })
+    .from(orders)
+    .where(
+      and(isNull(orders.userId), sql`lower(${orders.guestEmail}) = ${email}`)
+    )
+    .orderBy(desc(orders.createdAt))
+    .limit(20);
+});
+
 export const claimOrder = createServerFn({ method: "POST" })
   .inputValidator((data: { token: string }) => data)
   .handler(async ({ data }) => {
@@ -321,4 +395,181 @@ export const claimOrder = createServerFn({ method: "POST" })
       .update(orders)
       .set({ updatedAt: new Date(), userId: session.user.id })
       .where(eq(orders.id, order.id));
+  });
+
+export const claimGuestOrderById = createServerFn({ method: "POST" })
+  .inputValidator((data: { orderId: string }) => data)
+  .handler(async ({ data }) => {
+    const session = await getSession();
+
+    if (!session) {
+      throw new Error("Sign in before claiming an order");
+    }
+
+    await consumeRateLimit({
+      key: `claim-guest:${session.user.id}`,
+      limit: CLAIM_RATE_LIMIT,
+      windowMs: CLAIM_WINDOW_MS,
+    });
+
+    const order = await requireMatchingGuestOrder(
+      data.orderId,
+      session.user.email
+    );
+
+    await getDb()
+      .update(orders)
+      .set({ updatedAt: new Date(), userId: session.user.id })
+      .where(eq(orders.id, order.id));
+
+    return { orderNumber: order.orderNumber };
+  });
+
+export const openClaimableGuestOrder = createServerFn({ method: "POST" })
+  .inputValidator((data: { orderId: string }) => data)
+  .handler(async ({ data }) => {
+    const session = await getSession();
+
+    if (!session) {
+      throw new Error("Sign in before opening an order");
+    }
+
+    await consumeRateLimit({
+      key: `open-guest:${session.user.id}`,
+      limit: CLAIM_RATE_LIMIT,
+      windowMs: CLAIM_WINDOW_MS,
+    });
+
+    const order = await requireMatchingGuestOrder(
+      data.orderId,
+      session.user.email
+    );
+
+    const accessToken = createAccessToken();
+    const accessTokenHash = await hashToken(accessToken);
+    const accessTokenExpiresAt = expiresInDays(ORDER_TOKEN_DAYS);
+
+    await getDb()
+      .update(orders)
+      .set({
+        accessTokenExpiresAt,
+        accessTokenHash,
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, order.id));
+
+    return {
+      accessToken,
+      orderNumber: order.orderNumber,
+      orderStatusUrl: orderStatusUrl(accessToken),
+    };
+  });
+
+export const findOrderAccess = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => orderLookupSchema.parse(data))
+  .handler(async ({ data }) => {
+    const email = data.email.trim().toLowerCase();
+    const orderNumber = data.orderNumber.trim().toUpperCase();
+
+    await consumeRateLimit({
+      key: `order-lookup:${email}`,
+      limit: LOOKUP_RATE_LIMIT,
+      windowMs: LOOKUP_WINDOW_MS,
+    });
+
+    const db = getDb();
+    const [order] = await db
+      .select({
+        guestEmail: orders.guestEmail,
+        id: orders.id,
+        orderNumber: orders.orderNumber,
+      })
+      .from(orders)
+      .where(eq(orders.orderNumber, orderNumber))
+      .limit(1);
+
+    if (!order || order.guestEmail.toLowerCase() !== email) {
+      throw new Error("No order matched that email and order number");
+    }
+
+    const accessToken = createAccessToken();
+    const accessTokenHash = await hashToken(accessToken);
+    const accessTokenExpiresAt = expiresInDays(ORDER_TOKEN_DAYS);
+
+    await db
+      .update(orders)
+      .set({
+        accessTokenExpiresAt,
+        accessTokenHash,
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, order.id));
+
+    return {
+      accessToken,
+      orderNumber: order.orderNumber,
+      orderStatusUrl: orderStatusUrl(accessToken),
+    };
+  });
+
+export const refreshOrderPayment = createServerFn({ method: "POST" })
+  .inputValidator((data: { token: string }) => data)
+  .handler(async ({ data }) => {
+    const tokenHash = await hashToken(data.token);
+
+    await consumeRateLimit({
+      key: `order-refresh:${tokenHash}`,
+      limit: REFRESH_RATE_LIMIT,
+      windowMs: REFRESH_WINDOW_MS,
+    });
+
+    const db = getDb();
+    const [order] = await db
+      .select({
+        id: orders.id,
+        paymentStatus: orders.paymentStatus,
+        status: orders.status,
+        transactionId: orders.mayarTransactionId,
+      })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.accessTokenHash, tokenHash),
+          gt(orders.accessTokenExpiresAt, new Date())
+        )
+      )
+      .limit(1);
+
+    if (!order) {
+      throw new Error("Order not found or access link expired");
+    }
+
+    if (order.paymentStatus === "paid" || order.status === "paid") {
+      return { alreadyPaid: true, processed: true };
+    }
+
+    if (!order.transactionId) {
+      throw new Error("This order has no Mayar transaction to refresh");
+    }
+
+    const transaction = await getMayarTransaction(order.transactionId);
+
+    const result = await processMayarWebhook(
+      {
+        data: {
+          amount: transaction.amount,
+          id: transaction.id,
+          status: transaction.status,
+          transactionId: transaction.id,
+        },
+        eventType: "payment.received",
+        id: `customer-refresh-${order.id}-${Date.now()}`,
+      },
+      { verifiedTransactionId: transaction.id }
+    );
+
+    return {
+      alreadyPaid: false,
+      processed: Boolean(result.processed),
+    };
   });

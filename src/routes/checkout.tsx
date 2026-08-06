@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, LoaderCircle } from "lucide-react";
 import { useState } from "react";
 
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { getProducts } from "@/lib/catalog.functions";
 import { formatIdr } from "@/lib/format";
 import { createOrder } from "@/lib/order.functions";
+import { saveLastOrderHint } from "@/lib/order-access";
 
 export const Route = createFileRoute("/checkout")({
   component: CheckoutPage,
@@ -18,7 +19,6 @@ export const Route = createFileRoute("/checkout")({
 function CheckoutPage() {
   const products = Route.useLoaderData() as CatalogProduct[];
   const { clear, lines } = useCart();
-  const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const productMap = new Map(products.map((product) => [product.id, product]));
@@ -60,18 +60,21 @@ function CheckoutPage() {
         },
       });
 
-      clear();
-      await navigate({
-        params: { token: result.accessToken },
-        to: "/orders/$token",
+      const orderStatusPath = `/orders/${result.accessToken}`;
+
+      saveLastOrderHint({
+        createdAt: new Date().toISOString(),
+        orderNumber: result.orderNumber,
+        orderStatusPath,
       });
+      clear();
+      window.location.assign(orderStatusPath);
     } catch (submissionError) {
       setError(
         submissionError instanceof Error
           ? submissionError.message
           : "Unable to create your order. Check the form and try again."
       );
-    } finally {
       setSubmitting(false);
     }
   }
@@ -85,6 +88,15 @@ function CheckoutPage() {
         <Link className={buttonVariants({ className: "mt-8" })} to="/products">
           Browse the collection
         </Link>
+        <p className="mt-6 text-muted-foreground text-sm">
+          Lost an order link?{" "}
+          <Link
+            className="underline-offset-4 hover:underline"
+            to="/orders/find"
+          >
+            Find your order
+          </Link>
+        </p>
       </main>
     );
   }
@@ -228,6 +240,7 @@ function CheckoutPage() {
             </div>
             <p className="mt-5 text-muted-foreground text-xs leading-5">
               Your stock is reserved for 30 minutes while payment is completed.
+              Save the order status page after checkout to track this order.
             </p>
           </div>
         </aside>
