@@ -46,10 +46,17 @@ function ensureAuthSecret() {
   console.log("Generated BETTER_AUTH_SECRET in .env.local");
 }
 
+function deriveAdminName(email: string) {
+  const local = email.split("@")[0]?.trim();
+  return local && local.length > 0 ? local : "Admin";
+}
+
 async function promptAdmin() {
   const adminEmail = process.env.ADMIN_EMAIL;
-  const adminName = process.env.ADMIN_NAME;
   const adminPassword = process.env.ADMIN_PASSWORD;
+  const adminName =
+    process.env.ADMIN_NAME ??
+    (adminEmail ? deriveAdminName(adminEmail) : undefined);
 
   if (adminEmail && adminName && adminPassword) {
     return { adminEmail, adminName, adminPassword };
@@ -57,7 +64,7 @@ async function promptAdmin() {
 
   if (!process.stdin.isTTY) {
     console.log(
-      "Skipping admin bootstrap. Set ADMIN_EMAIL, ADMIN_NAME, and ADMIN_PASSWORD for CI."
+      "Skipping admin bootstrap. Set ADMIN_EMAIL and ADMIN_PASSWORD for CI (ADMIN_NAME optional)."
     );
     return null;
   }
@@ -69,17 +76,22 @@ async function promptAdmin() {
 
   try {
     const email = adminEmail ?? (await readline.question("Admin email: "));
-    const name = adminName ?? (await readline.question("Admin name: "));
-    const password =
-      adminPassword ?? (await readline.question("Admin password: "));
+    let password = adminPassword ?? "";
+    if (!password) {
+      password = await readline.question("Admin password (min 8 characters): ");
+    }
 
-    if (!(email && name) || password.length < 8) {
+    if (!email || password.length < 8) {
       fail(
-        "Admin email/name are required and password must be at least 8 characters"
+        "Admin email is required and password must be at least 8 characters"
       );
     }
 
-    return { adminEmail: email, adminName: name, adminPassword: password };
+    return {
+      adminEmail: email,
+      adminName: adminName ?? deriveAdminName(email),
+      adminPassword: password,
+    };
   } finally {
     readline.close();
   }
@@ -160,6 +172,24 @@ function validateMayar() {
   }
 }
 
+function printNextSteps() {
+  console.log("Setup complete");
+  console.log();
+  console.log("Next steps:");
+  console.log("  bun dev");
+  console.log();
+  console.log("After the first Vercel deploy:");
+  console.log("  1. Set APP_URL to your public deployment URL.");
+  console.log("  2. Ensure BETTER_AUTH_SECRET matches this environment.");
+  console.log("  3. Register the Mayar webhook:");
+  console.log(
+    "     npx -y mayar@latest webhook register https://your-domain.example/api/webhooks/mayar"
+  );
+  console.log(
+    "  4. Keep MAYAR_ENVIRONMENT=sandbox until checkout is verified."
+  );
+}
+
 async function main() {
   if (!process.env.DATABASE_URL) {
     fail("Set DATABASE_URL to a Neon Postgres connection string");
@@ -171,7 +201,7 @@ async function main() {
   await seedDatabase();
   await bootstrapAdmin();
   validateMayar();
-  console.log("Setup complete");
+  printNextSteps();
 }
 
 await main();
