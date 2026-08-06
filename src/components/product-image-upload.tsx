@@ -3,6 +3,7 @@ import { type ChangeEvent, useRef, useState } from "react";
 
 import { setProductImage } from "@/lib/admin.functions";
 import { useUploadThing } from "@/lib/uploadthing-client";
+import { cn } from "@/lib/utils";
 
 import { Button } from "./ui/button";
 
@@ -79,11 +80,26 @@ export function ProductImageUpload({
         type="button"
         variant="outline"
       >
-        {isUploading ? (
-          <LoaderCircle aria-hidden="true" className="animate-spin" />
-        ) : (
-          <ImagePlus aria-hidden="true" />
-        )}
+        <span className="relative size-4">
+          <ImagePlus
+            aria-hidden="true"
+            className={cn(
+              "absolute inset-0 size-4 transition-[filter,opacity,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)]",
+              isUploading
+                ? "scale-[0.25] opacity-0 blur-[4px]"
+                : "scale-100 opacity-100 blur-0"
+            )}
+          />
+          <LoaderCircle
+            aria-hidden="true"
+            className={cn(
+              "absolute inset-0 size-4 transition-[filter,opacity,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)]",
+              isUploading
+                ? "animate-spin scale-100 opacity-100 blur-0"
+                : "scale-[0.25] opacity-0 blur-[4px]"
+            )}
+          />
+        </span>
       </Button>
       {error ? (
         <span

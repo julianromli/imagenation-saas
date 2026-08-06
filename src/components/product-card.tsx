@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useCart } from "@/components/cart-provider";
 import { Button } from "@/components/ui/button";
 import { formatIdr } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 export type CatalogProduct = {
   availableStock: number;
@@ -17,6 +18,9 @@ export type CatalogProduct = {
   price: number;
   slug: string;
 };
+
+const productCardIconClass =
+  "absolute inset-0 size-4 transition-[filter,opacity,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)]";
 
 export function ProductCard({ product }: { product: CatalogProduct }) {
   const { add } = useCart();
@@ -75,7 +79,26 @@ export function ProductCard({ product }: { product: CatalogProduct }) {
           size="icon"
           variant={added ? "secondary" : "outline"}
         >
-          {added ? <Check aria-hidden="true" /> : <Plus aria-hidden="true" />}
+          <span className="relative size-4">
+            <Plus
+              aria-hidden="true"
+              className={cn(
+                productCardIconClass,
+                added
+                  ? "scale-[0.25] opacity-0 blur-[4px]"
+                  : "scale-100 opacity-100 blur-0"
+              )}
+            />
+            <Check
+              aria-hidden="true"
+              className={cn(
+                productCardIconClass,
+                added
+                  ? "scale-100 opacity-100 blur-0"
+                  : "scale-[0.25] opacity-0 blur-[4px]"
+              )}
+            />
+          </span>
         </Button>
       </div>
       <div aria-live="polite" className="sr-only">

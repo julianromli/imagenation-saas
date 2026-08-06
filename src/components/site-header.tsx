@@ -40,7 +40,7 @@ export function SiteHeader() {
       <div className="mx-auto flex min-h-20 w-full max-w-7xl items-center justify-between gap-4 px-5 sm:px-8 lg:grid lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
         <div className="flex min-w-0 items-center gap-3">
           <Link
-            className="group shrink-0 rounded-sm font-heading font-semibold text-xl tracking-[-0.06em] transition-[color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-muted-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+            className="group shrink-0 rounded-sm font-heading font-semibold text-xl tracking-[-0.06em] transition-[color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-muted-foreground active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
             to="/"
           >
             then
@@ -64,7 +64,7 @@ export function SiteHeader() {
         >
           {primaryNavItems.map((item) => (
             <Link
-              className="rounded-full px-3 py-2 transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-background hover:text-foreground active:scale-[0.97] [&.active]:bg-foreground [&.active]:text-background"
+              className="rounded-full px-3 py-2 transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-background hover:text-foreground active:scale-[0.96] [&.active]:bg-foreground [&.active]:text-background"
               key={item.to}
               to={item.to}
             >
@@ -76,7 +76,7 @@ export function SiteHeader() {
         <div className="flex items-center gap-1.5 lg:justify-self-end">
           {lastOrder ? (
             <a
-              className="hidden min-h-11 items-center rounded-full px-3 text-muted-foreground text-sm transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted hover:text-foreground active:scale-[0.97] xl:inline-flex"
+              className="hidden min-h-11 items-center rounded-full px-3 text-muted-foreground text-sm transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted hover:text-foreground active:scale-[0.96] xl:inline-flex"
               href={lastOrder.orderStatusPath}
             >
               Continue order
@@ -85,14 +85,14 @@ export function SiteHeader() {
           ) : null}
           <Link
             aria-label="Open account"
-            className="hidden size-11 items-center justify-center rounded-full text-muted-foreground transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted hover:text-foreground active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:inline-flex"
+            className="hidden size-11 items-center justify-center rounded-full text-muted-foreground transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted hover:text-foreground active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:inline-flex"
             to="/account"
           >
             <UserRound aria-hidden="true" className="size-4" />
           </Link>
           <Link
             aria-label={`Cart with ${count} ${count === 1 ? "item" : "items"}`}
-            className="group relative inline-flex size-11 items-center justify-center rounded-full border border-border transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            className="group relative inline-flex size-11 items-center justify-center rounded-full border border-border transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             to="/cart"
           >
             <ShoppingBag aria-hidden="true" className="size-4" />
@@ -106,7 +106,7 @@ export function SiteHeader() {
           <Sheet onOpenChange={setMobileMenuOpen} open={mobileMenuOpen}>
             <SheetTrigger
               aria-label="Open navigation menu"
-              className="inline-flex size-11 items-center justify-center rounded-full border border-border transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring lg:hidden"
+              className="inline-flex size-11 items-center justify-center rounded-full border border-border transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring lg:hidden"
             >
               <Menu aria-hidden="true" className="size-4" />
             </SheetTrigger>
@@ -124,7 +124,7 @@ export function SiteHeader() {
                 <nav aria-label="Mobile navigation" className="flex flex-col">
                   {primaryNavItems.map((item) => (
                     <Link
-                      className="group flex min-h-14 items-center justify-between border-border/70 border-b font-heading text-2xl tracking-[-0.04em] transition-[color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] first:border-t hover:text-muted-foreground active:scale-[0.98] [&.active]:text-muted-foreground"
+                      className="group flex min-h-14 items-center justify-between border-border/70 border-b font-heading text-2xl tracking-[-0.04em] transition-[color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] first:border-t hover:text-muted-foreground active:scale-[0.96] [&.active]:text-muted-foreground"
                       key={item.to}
                       onClick={() => setMobileMenuOpen(false)}
                       to={item.to}
@@ -140,7 +140,7 @@ export function SiteHeader() {
 
                 <div className="mt-8 grid gap-2">
                   <Link
-                    className="flex min-h-12 items-center justify-between rounded-full bg-foreground px-5 text-background text-sm transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-foreground/80 active:scale-[0.98]"
+                    className="flex min-h-12 items-center justify-between rounded-full bg-foreground px-5 text-background text-sm transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-foreground/80 active:scale-[0.96]"
                     onClick={() => setMobileMenuOpen(false)}
                     to="/account"
                   >
@@ -148,7 +148,7 @@ export function SiteHeader() {
                     <UserRound aria-hidden="true" className="size-4" />
                   </Link>
                   <Link
-                    className="flex min-h-12 items-center justify-between rounded-full border border-border px-5 text-sm transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted active:scale-[0.98]"
+                    className="flex min-h-12 items-center justify-between rounded-full border border-border px-5 text-sm transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted active:scale-[0.96]"
                     onClick={() => setMobileMenuOpen(false)}
                     to="/cart"
                   >
@@ -162,7 +162,7 @@ export function SiteHeader() {
                   </Link>
                   {lastOrder ? (
                     <a
-                      className="flex min-h-12 items-center justify-between rounded-full border border-border px-5 text-sm transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted active:scale-[0.98]"
+                      className="flex min-h-12 items-center justify-between rounded-full border border-border px-5 text-sm transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted active:scale-[0.96]"
                       href={lastOrder.orderStatusPath}
                       onClick={() => setMobileMenuOpen(false)}
                     >

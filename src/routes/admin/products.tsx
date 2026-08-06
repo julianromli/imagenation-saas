@@ -1,5 +1,5 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { Archive, LoaderCircle, Pencil, Plus } from "lucide-react";
+import { Archive, LoaderCircle, Pencil, Plus, X } from "lucide-react";
 import { useState } from "react";
 
 import { ProductImageUpload } from "@/components/product-image-upload";
@@ -137,14 +137,14 @@ function AdminProducts() {
               {category.name}
               <button
                 aria-label={`Delete ${category.name}`}
-                className="text-muted-foreground hover:text-destructive"
+                className="inline-flex size-6 items-center justify-center rounded-full text-muted-foreground transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-background/80 hover:text-destructive active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
                 onClick={async () => {
                   await deleteCategory({ data: { id: category.id } });
                   await router.invalidate();
                 }}
                 type="button"
               >
-                ×
+                <X aria-hidden="true" className="size-3.5" />
               </button>
             </span>
           ))}

@@ -55,7 +55,7 @@ function NavigationMenuItem({
 }
 
 const navigationMenuTriggerStyle = cva(
-  "group/navigation-menu-trigger inline-flex h-9 w-max items-center justify-center rounded-2xl px-2.5 py-1.5 font-medium text-sm outline-none transition-all hover:bg-muted focus:bg-muted focus-visible:outline-1 focus-visible:ring-3 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50 data-open:bg-muted/50 data-popup-open:bg-muted/50 data-open:focus:bg-muted data-open:hover:bg-muted data-popup-open:hover:bg-muted"
+  "group/navigation-menu-trigger inline-flex h-9 w-max items-center justify-center rounded-2xl px-2.5 py-1.5 font-medium text-sm outline-none transition-[background-color,color,opacity,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted focus:bg-muted focus-visible:outline-1 focus-visible:ring-3 focus-visible:ring-ring/30 active:scale-[0.96] disabled:pointer-events-none disabled:opacity-50 data-open:bg-muted/50 data-popup-open:bg-muted/50 data-open:focus:bg-muted data-open:hover:bg-muted data-popup-open:hover:bg-muted"
 );
 
 function NavigationMenuTrigger({
@@ -130,7 +130,7 @@ function NavigationMenuLink({
   return (
     <NavigationMenuPrimitive.Link
       className={cn(
-        "flex in-data-[slot=navigation-menu-content]:w-full items-center gap-2 in-data-[slot=navigation-menu-content]:rounded-xl rounded-2xl in-data-[slot=navigation-menu-content]:p-2 px-2.5 py-1.5 font-medium in-data-[slot=navigation-menu-content]:font-normal text-sm outline-none transition-all hover:bg-muted focus:bg-muted focus-visible:outline-1 focus-visible:ring-3 focus-visible:ring-ring/30 data-[active=true]:bg-muted/50 data-[active=true]:focus:bg-muted data-[active=true]:hover:bg-muted [&_svg:not([class*='size-'])]:size-4",
+        "flex in-data-[slot=navigation-menu-content]:w-full items-center gap-2 in-data-[slot=navigation-menu-content]:rounded-xl rounded-2xl in-data-[slot=navigation-menu-content]:p-2 px-2.5 py-1.5 font-medium in-data-[slot=navigation-menu-content]:font-normal text-sm outline-none transition-[background-color,color,opacity,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted focus:bg-muted focus-visible:outline-1 focus-visible:ring-3 focus-visible:ring-ring/30 active:scale-[0.96] data-[active=true]:bg-muted/50 data-[active=true]:focus:bg-muted data-[active=true]:hover:bg-muted [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       data-slot="navigation-menu-link"

@@ -5,6 +5,7 @@ import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { CartProvider } from "@/components/cart-provider";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { Button } from "@/components/ui/button";
 
 import appCss from "../styles.css?url";
 
@@ -20,13 +21,9 @@ export const Route = createRootRoute({
           ? error.message
           : "Check your connection and try again."}
       </p>
-      <button
-        className="mt-6 rounded-full bg-primary px-4 py-2 text-primary-foreground text-sm"
-        onClick={reset}
-        type="button"
-      >
+      <Button className="mt-6 rounded-full" onClick={reset} type="button">
         Try again
-      </button>
+      </Button>
     </main>
   ),
   head: () => ({
