@@ -78,9 +78,16 @@ const seedProducts = [
  * sample image is still a usable product, and setup must not fail because a
  * stock photo host was unreachable.
  */
+const SEED_IMAGE_TIMEOUT_MS = 8000;
+
 async function storeSeedImage(productId: string, sourceUrl: string) {
   try {
-    const response = await fetch(sourceUrl);
+    // A stock photo host that accepts the connection and then stalls would
+    // otherwise hold the setup request open until the Worker gives up, leaving
+    // the completion marker unwritten.
+    const response = await fetch(sourceUrl, {
+      signal: AbortSignal.timeout(SEED_IMAGE_TIMEOUT_MS),
+    });
 
     if (!response.ok) {
       return null;

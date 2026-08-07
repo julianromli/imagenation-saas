@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, LoaderCircle } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { useCart } from "@/components/cart-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -16,8 +16,17 @@ export const Route = createFileRoute("/checkout")({
 
 function CheckoutPage() {
   const { clear, lines } = useCart();
-  const { items, loading, subtotal } = useCartProducts();
+  const {
+    error: cartError,
+    items,
+    loading,
+    retry,
+    subtotal,
+  } = useCartProducts();
   const [submitting, setSubmitting] = useState(false);
+  // One key for this checkout attempt. A failed submit reuses it, so a retry is
+  // recognised as the same checkout rather than a new one. See ADR-0003.
+  const idempotencyKey = useRef(crypto.randomUUID());
   const [error, setError] = useState("");
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -41,9 +50,7 @@ function CheckoutPage() {
           postalCode: String(form.get("postalCode") ?? ""),
           province: String(form.get("province") ?? ""),
         },
-        // A retry must not create a second order. The key is minted per
-        // submission attempt, so a network retry carries the same one.
-        headers: { "Idempotency-Key": crypto.randomUUID() },
+        headers: { "Idempotency-Key": idempotencyKey.current },
       });
 
       const orderStatusPath = `/orders/${result.accessToken}`;
@@ -53,6 +60,7 @@ function CheckoutPage() {
         orderNumber: result.orderNumber,
         orderStatusPath,
       });
+      idempotencyKey.current = crypto.randomUUID();
       clear();
       window.location.assign(orderStatusPath);
     } catch (submissionError) {
@@ -63,6 +71,23 @@ function CheckoutPage() {
       );
       setSubmitting(false);
     }
+  }
+
+  if (cartError) {
+    return (
+      <main className="mx-auto max-w-3xl px-5 pt-20 pb-32 text-center sm:px-8">
+        <h1 className="font-heading font-medium text-4xl tracking-[-0.05em]">
+          Could not load your bag.
+        </h1>
+        <p className="mt-4 text-muted-foreground text-sm">{cartError}</p>
+        <p className="mt-2 text-muted-foreground text-sm">
+          Your items are still saved on this device.
+        </p>
+        <Button className="mt-8 rounded-full" onClick={retry} type="button">
+          Try again
+        </Button>
+      </main>
+    );
   }
 
   if (loading) {

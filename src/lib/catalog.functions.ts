@@ -107,10 +107,18 @@ export const getProducts = createServerFn({ method: "GET" })
 export const getProductsByIds = createServerFn({ method: "GET" })
   .validator((data: { ids: string[] }) => data)
   .handler(async ({ data }) => {
-    const ids = [...new Set(data.ids)].slice(0, CATALOG_LIMIT);
+    const ids = [...new Set(data.ids)];
 
     if (ids.length === 0) {
       return [];
+    }
+
+    // Refuse rather than truncate. A silently shortened list would show the
+    // buyer a cart that is missing lines, with no sign anything was dropped.
+    if (ids.length > CATALOG_LIMIT) {
+      throw new Error(
+        `A cart cannot hold more than ${CATALOG_LIMIT} different products`
+      );
     }
 
     const rows = await selectProducts().where(

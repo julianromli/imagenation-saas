@@ -1,4 +1,4 @@
-import { and, eq, lt, sql } from "drizzle-orm";
+import { and, asc, eq, lt, sql } from "drizzle-orm";
 
 import { type BatchStatement, getDb, runBatch } from "@/db";
 import { inventoryReservations, orders, products } from "@/db/schema";
@@ -11,7 +11,28 @@ type ReleaseReason = "expired" | "payment_creation_failed";
  * The scheduled job asks for this list, checks each order against Mayar, and
  * only then releases the ones that were never paid. See ADR-0010.
  */
-export async function listExpiredReservationOrderIds(now = new Date()) {
+export async function listExpiredReservationOrderIds(
+  now = new Date(),
+  limit?: number
+) {
+  const query = getDb()
+    .selectDistinct({ orderId: inventoryReservations.orderId })
+    .from(inventoryReservations)
+    .where(
+      and(
+        eq(inventoryReservations.status, "reserved"),
+        lt(inventoryReservations.expiresAt, now)
+      )
+    )
+    // Oldest first, so a backlog is worked through instead of starved.
+    .orderBy(asc(inventoryReservations.expiresAt));
+  const rows = await (limit === undefined ? query : query.limit(limit));
+
+  return rows.map((row) => row.orderId);
+}
+
+/** How many orders are still waiting, for the sweep to report as a backlog. */
+export async function countExpiredReservationOrders(now = new Date()) {
   const rows = await getDb()
     .selectDistinct({ orderId: inventoryReservations.orderId })
     .from(inventoryReservations)
@@ -22,7 +43,7 @@ export async function listExpiredReservationOrderIds(now = new Date()) {
       )
     );
 
-  return rows.map((row) => row.orderId);
+  return rows.length;
 }
 
 /**
@@ -59,6 +80,12 @@ export async function releaseOrderReservation(
   const statements: BatchStatement[] = [];
 
   for (const reservation of reservations) {
+    // Both statements are guarded on the reservation still being reserved, so a
+    // second concurrent release changes nothing rather than returning the stock
+    // twice. The product update reads that status through a subquery, because
+    // the row it writes is the product, not the reservation.
+    const stillReserved = sql`EXISTS (SELECT 1 FROM ${inventoryReservations} WHERE ${inventoryReservations.id} = ${reservation.id} AND ${inventoryReservations.status} = 'reserved')`;
+
     statements.push(
       db
         .update(products)
@@ -67,7 +94,7 @@ export async function releaseOrderReservation(
           reservedStock: sql`${products.reservedStock} - ${reservation.quantity}`,
           updatedAt: now,
         })
-        .where(eq(products.id, reservation.productId)),
+        .where(and(eq(products.id, reservation.productId), stillReserved)),
       db
         .update(inventoryReservations)
         .set({
@@ -75,7 +102,12 @@ export async function releaseOrderReservation(
           status: reason === "payment_creation_failed" ? "released" : "expired",
           updatedAt: now,
         })
-        .where(eq(inventoryReservations.id, reservation.id))
+        .where(
+          and(
+            eq(inventoryReservations.id, reservation.id),
+            eq(inventoryReservations.status, "reserved")
+          )
+        )
     );
   }
 

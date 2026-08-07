@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, lt } from "drizzle-orm";
 
 import { getDb } from "@/db";
 import { setupMetadata } from "@/db/schema";
@@ -6,6 +6,11 @@ import { createId } from "@/lib/ids";
 
 export const WEBHOOK_SECRET_KEY = "mayar_webhook_secret";
 export const SETUP_COMPLETED_KEY = "setup_completed";
+export const SETUP_CLAIM_KEY = "setup_claim";
+
+// A claim this old belonged to a run that died before it could finish or clean
+// up. Without a takeover window a crashed setup would lock the store forever.
+const STALE_CLAIM_MS = 15 * 60 * 1000;
 
 export async function readSetupValue(key: string) {
   const [row] = await getDb()
@@ -17,23 +22,66 @@ export async function readSetupValue(key: string) {
   return row?.value ?? null;
 }
 
-export async function writeSetupValue(
-  key: string,
-  value: Record<string, string>
-) {
+/**
+ * Writes one row per key.
+ *
+ * The unique index on `key` decides the outcome, so two concurrent writers
+ * cannot leave two rows behind for `readSetupValue` to choose between.
+ */
+export function writeSetupValue(key: string, value: Record<string, string>) {
+  return getDb()
+    .insert(setupMetadata)
+    .values({ id: createId(), key, value })
+    .onConflictDoUpdate({
+      set: { updatedAt: new Date(), value },
+      target: setupMetadata.key,
+    });
+}
+
+/**
+ * Takes the setup claim, or reports that somebody else holds it.
+ *
+ * Setup creates an administrator through Better Auth, which writes on its own
+ * and cannot join a D1 batch. The mutex therefore lives in this row: the unique
+ * index means exactly one concurrent request wins the insert.
+ */
+export async function claimSetup(now = new Date()) {
   const db = getDb();
-  const existing = await readSetupValue(key);
+  const claimedAt = now.toISOString();
+  const inserted = await db
+    .insert(setupMetadata)
+    .values({
+      id: createId(),
+      key: SETUP_CLAIM_KEY,
+      value: { claimedAt },
+    })
+    .onConflictDoNothing()
+    .returning({ id: setupMetadata.id });
 
-  if (existing) {
-    await db
-      .update(setupMetadata)
-      .set({ updatedAt: new Date(), value })
-      .where(eq(setupMetadata.key, key));
-
-    return;
+  if (inserted.length > 0) {
+    return true;
   }
 
-  await db.insert(setupMetadata).values({ id: createId(), key, value });
+  // Somebody holds it. Take it over only if their run is old enough to be dead.
+  const takenOver = await db
+    .update(setupMetadata)
+    .set({ updatedAt: now, value: { claimedAt } })
+    .where(
+      and(
+        eq(setupMetadata.key, SETUP_CLAIM_KEY),
+        lt(setupMetadata.updatedAt, new Date(now.getTime() - STALE_CLAIM_MS))
+      )
+    )
+    .returning({ id: setupMetadata.id });
+
+  return takenOver.length > 0;
+}
+
+/** Frees the claim so a failed run can be retried. */
+export function releaseSetupClaim() {
+  return getDb()
+    .delete(setupMetadata)
+    .where(eq(setupMetadata.key, SETUP_CLAIM_KEY));
 }
 
 /**

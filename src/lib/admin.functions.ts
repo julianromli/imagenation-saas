@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { createServerFn } from "@tanstack/react-start";
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, asc, count, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { getDb } from "@/db";
@@ -31,6 +31,8 @@ const transitions: Record<string, string[]> = {
   shipped: ["processing"],
 };
 const categorySlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+// Keys this application minted, and nothing else in the bucket.
+const productImageKeyPattern = /^products\/[a-z0-9-]+\.(avif|jpg|png|webp)$/;
 
 export const getAdminStats = createServerFn({ method: "GET" }).handler(
   async () => {
@@ -166,7 +168,12 @@ export const setProductImage = createServerFn({ method: "POST" })
     z
       .object({
         alt: z.string().trim().min(1).max(160),
-        objectKey: z.string().trim().min(1).max(512),
+        objectKey: z
+          .string()
+          .trim()
+          .max(512)
+          // A free-form string would let an admin point a product at any object.
+          .regex(productImageKeyPattern),
         productId: z.string().min(1),
       })
       .parse(data)
@@ -204,6 +211,26 @@ export const setProductImage = createServerFn({ method: "POST" })
 
     return inserted[0];
   });
+
+/**
+ * Categories for the admin screen, without the shared cache the public
+ * catalogue carries. An admin who creates or deletes a category must see the
+ * result on the next load, not up to a minute later.
+ */
+export const getAdminCategories = createServerFn({ method: "GET" }).handler(
+  async () => {
+    await ensureAdmin();
+
+    return getDb()
+      .select({
+        id: categories.id,
+        name: categories.name,
+        slug: categories.slug,
+      })
+      .from(categories)
+      .orderBy(asc(categories.name));
+  }
+);
 
 export const getAdminOrders = createServerFn({ method: "GET" }).handler(
   async () => {
@@ -269,11 +296,15 @@ export const updateOrderStatus = createServerFn({ method: "POST" })
       throw new Error(`Cannot move ${order.status} to ${data.status}`);
     }
 
-    await db.batch([
+    // The transition was validated against the status read a moment ago, so the
+    // write repeats that status as its own precondition. Without it, two
+    // administrators acting at once could both pass a check the other invalidated.
+    const [updated] = await db.batch([
       db
         .update(orders)
         .set({ status: data.status, updatedAt: new Date() })
-        .where(eq(orders.id, order.id)),
+        .where(and(eq(orders.id, order.id), eq(orders.status, order.status)))
+        .returning({ id: orders.id }),
       db.insert(orderStatusHistory).values({
         actorUserId: session.user.id,
         fromStatus: order.status,
@@ -283,6 +314,12 @@ export const updateOrderStatus = createServerFn({ method: "POST" })
         toStatus: data.status,
       }),
     ]);
+
+    if (updated.length === 0) {
+      throw new Error(
+        "This order changed while you were working on it. Reload and try again."
+      );
+    }
 
     return { status: data.status };
   });
@@ -333,7 +370,7 @@ export const markOrderRefunded = createServerFn({ method: "POST" })
 
     const now = new Date();
 
-    await db.batch([
+    const [refunded] = await db.batch([
       db
         .update(orders)
         .set({
@@ -341,7 +378,8 @@ export const markOrderRefunded = createServerFn({ method: "POST" })
           status: "refunded",
           updatedAt: now,
         })
-        .where(eq(orders.id, order.id)),
+        .where(and(eq(orders.id, order.id), eq(orders.paymentStatus, "paid")))
+        .returning({ id: orders.id }),
       db
         .update(paymentAttempts)
         .set({ status: "refunded", updatedAt: now })
@@ -362,6 +400,12 @@ export const markOrderRefunded = createServerFn({ method: "POST" })
         toStatus: "refunded",
       }),
     ]);
+
+    if (refunded.length === 0) {
+      throw new Error(
+        "This order is no longer marked paid. Reload and try again."
+      );
+    }
 
     return { status: "refunded" as const };
   });

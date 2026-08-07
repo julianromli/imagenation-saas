@@ -1,8 +1,9 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, lt } from "drizzle-orm";
 
 import { getDb } from "@/db";
-import { orders } from "@/db/schema";
+import { orders, webhookEvents } from "@/db/schema";
 import {
+  countExpiredReservationOrders,
   listExpiredReservationOrderIds,
   releaseOrderReservation,
 } from "@/lib/inventory";
@@ -16,6 +17,10 @@ import { processMayarWebhook } from "@/lib/payment.functions";
 // Mayar allows 50 requests per minute for each API key. One provider call per
 // order, well under the limit at a five minute schedule. See ADR-0010.
 const MAX_ORDERS_PER_RUN = 40;
+
+// Webhook payloads are raw provider data and hold customer details. They are
+// kept long enough to investigate a payment dispute, then dropped.
+const WEBHOOK_RETENTION_DAYS = 30;
 
 type ReconcileResult = {
   cancelled: number;
@@ -35,12 +40,16 @@ type ReconcileResult = {
 export async function reconcileExpiredOrders(
   now = new Date()
 ): Promise<ReconcileResult> {
-  const expired = await listExpiredReservationOrderIds(now);
-  const batch = expired.slice(0, MAX_ORDERS_PER_RUN);
+  // The scan is bounded in SQL rather than in JavaScript, so a large backlog
+  // does not read every expired row on every run.
+  const [batch, total] = await Promise.all([
+    listExpiredReservationOrderIds(now, MAX_ORDERS_PER_RUN),
+    countExpiredReservationOrders(now),
+  ]);
   const result: ReconcileResult = {
     cancelled: 0,
     examined: batch.length,
-    remaining: expired.length - batch.length,
+    remaining: Math.max(0, total - batch.length),
     settled: 0,
     skipped: 0,
   };
@@ -71,6 +80,29 @@ export async function reconcileExpiredOrders(
   }
 
   return result;
+}
+
+/**
+ * Drops webhook payloads that have outlived their purpose.
+ *
+ * Only settled events are removed. A `failed` row is evidence of something that
+ * still needs attention, so it stays.
+ */
+export async function pruneSettledWebhookEvents(now = new Date()) {
+  const cutoff = new Date(
+    now.getTime() - WEBHOOK_RETENTION_DAYS * 24 * 60 * 60 * 1000
+  );
+  const deleted = await getDb()
+    .delete(webhookEvents)
+    .where(
+      and(
+        inArray(webhookEvents.status, ["completed", "ignored"]),
+        lt(webhookEvents.updatedAt, cutoff)
+      )
+    )
+    .returning({ id: webhookEvents.id });
+
+  return deleted.length;
 }
 
 async function settleIfPaid(

@@ -39,7 +39,9 @@ export const Route = createFileRoute("/api/webhooks/mayar/$secret")({
 
         const body = await request.text();
 
-        if (body.length > MAX_WEBHOOK_BYTES) {
+        // `length` counts UTF-16 code units. A payload of multi-byte characters
+        // is larger on the wire than that number suggests.
+        if (new TextEncoder().encode(body).byteLength > MAX_WEBHOOK_BYTES) {
           return Response.json({ error: "Payload too large" }, { status: 413 });
         }
 

@@ -162,6 +162,47 @@ async function claimWebhookEvent(
   return { claimed: existing, duplicate: true };
 }
 
+/**
+ * Finds the event row an insert conflicted with.
+ *
+ * The event ID is asked for first and on its own. Combining both identifiers in
+ * one OR with `limit(1)` let an unordered result hand back a different event
+ * that merely shared the transaction.
+ */
+async function findExistingEvent(
+  providerEventId: string,
+  verifiedTransactionId?: string
+) {
+  const db = getDb();
+  const [byEventId] = await db
+    .select()
+    .from(webhookEvents)
+    .where(
+      and(
+        eq(webhookEvents.provider, "mayar"),
+        eq(webhookEvents.providerEventId, providerEventId)
+      )
+    )
+    .limit(1);
+
+  if (byEventId || !verifiedTransactionId) {
+    return byEventId;
+  }
+
+  const [byTransaction] = await db
+    .select()
+    .from(webhookEvents)
+    .where(
+      and(
+        eq(webhookEvents.provider, "mayar"),
+        eq(webhookEvents.transactionId, verifiedTransactionId)
+      )
+    )
+    .limit(1);
+
+  return byTransaction;
+}
+
 export async function processMayarWebhook(
   payload: unknown,
   options: ProcessOptions = {}
@@ -187,27 +228,7 @@ export async function processMayarWebhook(
     .onConflictDoNothing()
     .returning();
   const eventRecord =
-    event ??
-    (
-      await db
-        .select()
-        .from(webhookEvents)
-        .where(
-          verifiedTransactionId
-            ? and(
-                eq(webhookEvents.provider, "mayar"),
-                or(
-                  eq(webhookEvents.providerEventId, eventId),
-                  eq(webhookEvents.transactionId, verifiedTransactionId)
-                )
-              )
-            : and(
-                eq(webhookEvents.provider, "mayar"),
-                eq(webhookEvents.providerEventId, eventId)
-              )
-        )
-        .limit(1)
-    )[0];
+    event ?? (await findExistingEvent(eventId, verifiedTransactionId));
 
   if (!eventRecord) {
     throw new Error("Unable to persist Mayar webhook event");
@@ -354,6 +375,10 @@ async function settleVerifiedPayment(
   const statements: BatchStatement[] = [];
 
   for (const reservation of reservations) {
+    // Guarded the same way as a release: a second concurrent settlement must
+    // not take reserved stock down twice.
+    const stillReserved = sql`EXISTS (SELECT 1 FROM ${inventoryReservations} WHERE ${inventoryReservations.id} = ${reservation.id} AND ${inventoryReservations.status} = 'reserved')`;
+
     statements.push(
       db
         .update(products)
@@ -361,7 +386,7 @@ async function settleVerifiedPayment(
           reservedStock: sql`${products.reservedStock} - ${reservation.quantity}`,
           updatedAt: now,
         })
-        .where(eq(products.id, reservation.productId)),
+        .where(and(eq(products.id, reservation.productId), stillReserved)),
       db
         .update(inventoryReservations)
         .set({
@@ -369,7 +394,12 @@ async function settleVerifiedPayment(
           status: "converted",
           updatedAt: now,
         })
-        .where(eq(inventoryReservations.id, reservation.id))
+        .where(
+          and(
+            eq(inventoryReservations.id, reservation.id),
+            eq(inventoryReservations.status, "reserved")
+          )
+        )
     );
   }
 
@@ -388,10 +418,16 @@ async function settleVerifiedPayment(
       .update(paymentAttempts)
       .set({
         status: "paid",
-        transactionId: transactionDetail.id,
         updatedAt: now,
       })
-      .where(eq(paymentAttempts.orderId, order.id)),
+      // Only the attempt that was actually paid. An order can hold earlier
+      // attempts, and those did not become paid.
+      .where(
+        and(
+          eq(paymentAttempts.orderId, order.id),
+          eq(paymentAttempts.transactionId, transactionDetail.id)
+        )
+      ),
     db.insert(orderStatusHistory).values({
       actorUserId: null,
       fromStatus: order.status,

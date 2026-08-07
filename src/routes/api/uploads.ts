@@ -9,6 +9,57 @@ import {
   PRODUCT_IMAGE_PREFIX,
 } from "@/lib/uploads";
 
+/** Reads a body, giving up as soon as it passes `maxBytes`. */
+async function readBounded(
+  body: ReadableStream<Uint8Array> | null,
+  maxBytes: number
+) {
+  if (!body) {
+    return new Uint8Array();
+  }
+
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  try {
+    let done = false;
+
+    while (!done) {
+      // biome-ignore lint/performance/noAwaitInLoops: Reading a stream is sequential by definition.
+      const { done: finished, value } = await reader.read();
+
+      done = finished;
+
+      if (!value) {
+        continue;
+      }
+
+      total += value.byteLength;
+
+      if (total > maxBytes) {
+        await reader.cancel();
+
+        return null;
+      }
+
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const merged = new Uint8Array(total);
+  let offset = 0;
+
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return merged;
+}
+
 export const Route = createFileRoute("/api/uploads")({
   server: {
     handlers: {
@@ -40,14 +91,22 @@ export const Route = createFileRoute("/api/uploads")({
           );
         }
 
-        // Read the body rather than stream it. The size cap above keeps this
-        // bounded, and a declared length can lie.
-        const body = await request.arrayBuffer();
+        // A declared length can lie, and it can also be absent. Read in chunks
+        // and stop as soon as the cap is passed, rather than buffering whatever
+        // arrives and checking afterwards.
+        const body = await readBounded(request.body, MAX_IMAGE_BYTES);
 
-        if (body.byteLength > MAX_IMAGE_BYTES) {
+        if (!body) {
           return Response.json(
             { error: "Choose an image of 4MB or less" },
             { status: 413 }
+          );
+        }
+
+        if (body.byteLength === 0) {
+          return Response.json(
+            { error: "That request carried no image" },
+            { status: 400 }
           );
         }
 

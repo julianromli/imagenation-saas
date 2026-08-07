@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "56e572b5-e02c-48da-914f-2fd090f1eefd",
+  "id": "d2fbcb97-c536-4c6f-a970-fbe46688e057",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -345,17 +345,17 @@
     "checkout_request": {
       "name": "checkout_request",
       "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
         "fingerprint": {
           "name": "fingerprint",
           "type": "text",
           "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
           "notNull": true,
           "autoincrement": false
         },
@@ -965,13 +965,6 @@
           "name": "order_user_id_idx",
           "columns": [
             "user_id"
-          ],
-          "isUnique": false
-        },
-        "order_status_idx": {
-          "name": "order_status_idx",
-          "columns": [
-            "status"
           ],
           "isUnique": false
         },
@@ -1606,7 +1599,15 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "setup_metadata_key_unique": {
+          "name": "setup_metadata_key_unique",
+          "columns": [
+            "key"
+          ],
+          "isUnique": true
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -1860,13 +1861,6 @@
             "transaction_id"
           ],
           "isUnique": true
-        },
-        "webhook_transaction_id_idx": {
-          "name": "webhook_transaction_id_idx",
-          "columns": [
-            "transaction_id"
-          ],
-          "isUnique": false
         },
         "webhook_provider_event_unique": {
           "name": "webhook_provider_event_unique",

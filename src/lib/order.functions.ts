@@ -35,6 +35,10 @@ const RESERVATION_MINUTES = 30;
 const ORDER_TOKEN_DAYS = 30;
 const UNIQUE_VIOLATION = /UNIQUE constraint failed/i;
 const CHECK_VIOLATION = /CHECK constraint failed/i;
+const MAX_IDEMPOTENCY_KEY_LENGTH = 255;
+// Printable ASCII only. The value is stored as a primary key and echoed in
+// errors, so control characters have no business in it.
+const PRINTABLE_ASCII = /^[\x20-\x7E]+$/;
 
 function expiresInMinutes(minutes: number) {
   return new Date(Date.now() + minutes * 60 * 1000);
@@ -210,13 +214,28 @@ async function describeStockShortfall(
 
 export const createOrder = createServerFn({ method: "POST" })
   .validator((data: unknown) => checkoutSchema.parse(data))
-  .handler(({ data }) => {
+  .handler(async ({ data }) => {
     const request = getRequest();
-    const idempotencyKey = request.headers.get("Idempotency-Key");
+    const idempotencyKey = request.headers.get("Idempotency-Key")?.trim();
 
     if (!idempotencyKey) {
       throw new Error("Checkout requires an Idempotency-Key header");
     }
+
+    if (
+      idempotencyKey.length > MAX_IDEMPOTENCY_KEY_LENGTH ||
+      !PRINTABLE_ASCII.test(idempotencyKey)
+    ) {
+      throw new Error("That Idempotency-Key is not a valid value");
+    }
+
+    // Checkout writes rows and calls a paid provider API, so it is rate limited
+    // like every other public write path. The email is the key, because a guest
+    // checkout has no session to key on.
+    await consumeRateLimit(
+      "CHECKOUT_LIMITER",
+      `checkout:${data.email.trim().toLowerCase()}`
+    );
 
     return createOrderForCheckout(
       data,
@@ -445,7 +464,17 @@ export async function createOrderForCheckout(
       total,
     };
   } catch (error) {
-    await releaseOrderReservation(orderId, "payment_creation_failed");
+    // The invoice failure is what the caller needs to see. A cleanup that also
+    // fails must not replace it, or the real cause is lost.
+    await releaseOrderReservation(orderId, "payment_creation_failed").catch(
+      (releaseError) => {
+        console.error(
+          `Failed to release reservation for ${orderId} after invoice creation failed`,
+          releaseError
+        );
+      }
+    );
+
     throw error;
   }
 }

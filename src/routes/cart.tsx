@@ -13,7 +13,24 @@ export const Route = createFileRoute("/cart")({
 
 function CartPage() {
   const { clear, remove, setQuantity } = useCart();
-  const { items, loading, subtotal } = useCartProducts();
+  const { error, items, loading, retry, subtotal } = useCartProducts();
+
+  if (error) {
+    return (
+      <main className="mx-auto max-w-3xl px-5 pt-20 pb-32 text-center sm:px-8">
+        <h1 className="font-heading font-medium text-4xl tracking-[-0.05em]">
+          Could not load your bag.
+        </h1>
+        <p className="mt-4 text-muted-foreground text-sm">{error}</p>
+        <p className="mt-2 text-muted-foreground text-sm">
+          Your items are still saved on this device.
+        </p>
+        <Button className="mt-8 rounded-full" onClick={retry} type="button">
+          Try again
+        </Button>
+      </main>
+    );
+  }
 
   if (loading) {
     return (

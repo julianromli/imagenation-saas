@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 
 /**
  * Prepares a local development environment.
@@ -42,6 +42,8 @@ function appendKey(key: string, value: string) {
   writeFileSync(ENV_PATH, `${current}${separator}${key}=${value}\n`, {
     mode: 0o600,
   });
+  // `mode` only applies when the file is created, and this file holds secrets.
+  chmodSync(ENV_PATH, 0o600);
   console.log(`Generated ${key} in ${ENV_PATH}`);
 }
 

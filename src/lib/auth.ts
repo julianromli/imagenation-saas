@@ -4,9 +4,7 @@ import { tanstackStartCookies } from "better-auth/tanstack-start";
 
 import { getDb } from "@/db";
 import { authSchema } from "@/db/schema";
-import { getRuntimeEnv } from "@/lib/runtime-env";
-
-const DEVELOPMENT_SECRET = "development-only-secret-change-this-during-setup";
+import { requireEnv } from "@/lib/runtime-env";
 
 // Five minutes. Long enough to remove most session reads from D1, short enough
 // that a revoked session stops working quickly. See ADR-0001.
@@ -32,7 +30,7 @@ function createAuth() {
       enabled: true,
     },
     plugins: [tanstackStartCookies()],
-    secret: getRuntimeEnv().BETTER_AUTH_SECRET ?? DEVELOPMENT_SECRET,
+    secret: requireEnv("BETTER_AUTH_SECRET"),
     session: {
       cookieCache: {
         enabled: true,

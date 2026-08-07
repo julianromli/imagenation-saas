@@ -10,7 +10,9 @@ import { getAuth } from "@/lib/auth";
 import { createAccessToken, hashToken } from "@/lib/ids";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import {
+  claimSetup,
   readSetupValue,
+  releaseSetupClaim,
   SETUP_COMPLETED_KEY,
   WEBHOOK_SECRET_KEY,
   writeSetupValue,
@@ -67,44 +69,56 @@ export const runSetup = createServerFn({ method: "POST" })
       throw new Error("Setup has already run for this store");
     }
 
-    const db = getDb();
-    const [existing] = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.email, data.email))
-      .limit(1);
-
-    // ADR-0009: an account that already exists is never promoted silently.
-    if (existing) {
-      throw new Error(
-        "An account with that email already exists. Promote it deliberately instead."
-      );
+    // Better Auth writes the account on its own and cannot join a D1 batch, so
+    // the mutex is a claim row instead. Exactly one concurrent request wins it.
+    if (!(await claimSetup())) {
+      throw new Error("Setup is already running. Wait, then reload this page.");
     }
 
-    await getAuth().api.signUpEmail({
-      body: {
-        email: data.email,
-        name: data.name,
-        password: data.password,
-      },
-    });
-    await db
-      .update(users)
-      .set({ role: "admin", updatedAt: new Date() })
-      .where(eq(users.email, data.email));
+    try {
+      const db = getDb();
+      const [existing] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, data.email))
+        .limit(1);
 
-    const seeded = await seedDatabase();
-    const webhookSecret = createAccessToken();
+      // ADR-0009: an account that already exists is never promoted silently.
+      if (existing) {
+        throw new Error(
+          "An account with that email already exists. Promote it deliberately instead."
+        );
+      }
 
-    await writeSetupValue(WEBHOOK_SECRET_KEY, { secret: webhookSecret });
-    await writeSetupValue(SETUP_COMPLETED_KEY, {
-      completedAt: new Date().toISOString(),
-    });
+      await getAuth().api.signUpEmail({
+        body: {
+          email: data.email,
+          name: data.name,
+          password: data.password,
+        },
+      });
+      await db
+        .update(users)
+        .set({ role: "admin", updatedAt: new Date() })
+        .where(eq(users.email, data.email));
 
-    const { origin } = new URL(getRequest().url);
+      const seeded = await seedDatabase();
+      const webhookSecret = createAccessToken();
 
-    return {
-      seeded,
-      webhookUrl: `${origin}/api/webhooks/mayar/${webhookSecret}`,
-    };
+      await writeSetupValue(WEBHOOK_SECRET_KEY, { secret: webhookSecret });
+      await writeSetupValue(SETUP_COMPLETED_KEY, {
+        completedAt: new Date().toISOString(),
+      });
+
+      const { origin } = new URL(getRequest().url);
+
+      return {
+        seeded,
+        webhookUrl: `${origin}/api/webhooks/mayar/${webhookSecret}`,
+      };
+    } catch (error) {
+      // Free the claim so the operator can correct the input and try again.
+      await releaseSetupClaim().catch(() => undefined);
+      throw error;
+    }
   });

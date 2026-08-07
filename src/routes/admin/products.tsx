@@ -41,18 +41,18 @@ import {
   createCategory,
   createProduct,
   deleteCategory,
+  getAdminCategories,
   getAdminProducts,
   setProductImage,
   updateProduct,
 } from "@/lib/admin.functions";
-import { getCategories } from "@/lib/catalog.functions";
 import { formatIdr } from "@/lib/format";
 import { productImageUrl } from "@/lib/images";
 import { uploadProductImage } from "@/lib/uploads";
 
 export const Route = createFileRoute("/admin/products")({
   component: AdminProducts,
-  loader: () => Promise.all([getAdminProducts(), getCategories()]),
+  loader: () => Promise.all([getAdminProducts(), getAdminCategories()]),
 });
 
 function AdminProducts() {

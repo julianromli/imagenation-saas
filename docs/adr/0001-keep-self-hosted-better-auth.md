@@ -6,7 +6,7 @@ We will keep Better Auth self-hosted with the application. The decision holds af
 
 - Better Auth remains responsible for authentication routes and sessions.
 - D1 is the database for auth operations. See ADR-0011.
-- The application must require a production `BETTER_AUTH_SECRET`.
+- The application requires `BETTER_AUTH_SECRET` in every environment and refuses to start without it. A shared development fallback was removed: a deploy that forgot the secret would otherwise have signed its cookies with a value published in this repository.
 - Session cookie caching is enabled with a five minute lifetime, so most requests verify a session without reading D1. Paths that check the admin role must pass `disableCookieCache: true`, because ADR-0014 changes a user role after the account already exists.
 - Workers KV as secondary session storage was rejected. It is eventually consistent for up to about a minute, so a signed-out session could still pass in some locations, and cookie caching already removes the same reads without a further binding.
 - A future migration to a hosted identity provider must include an explicit identity and authorization migration plan.

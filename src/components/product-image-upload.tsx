@@ -55,6 +55,7 @@ export function ProductImageUpload({
         accept="image/*"
         aria-label={`Select image for ${productName}`}
         className="sr-only"
+        disabled={isUploading}
         id={`image-${productId}`}
         onChange={chooseFile}
         ref={inputRef}

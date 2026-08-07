@@ -6,6 +6,7 @@ import { env } from "cloudflare:workers";
  * enough for these paths. See ADR-0015.
  */
 export type LimiterName =
+  | "CHECKOUT_LIMITER"
   | "ORDER_CLAIM_LIMITER"
   | "ORDER_LOOKUP_LIMITER"
   | "PAYMENT_REFRESH_LIMITER"

@@ -1,6 +1,9 @@
 import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 
-import { reconcileExpiredOrders } from "@/lib/scheduled";
+import {
+  pruneSettledWebhookEvents,
+  reconcileExpiredOrders,
+} from "@/lib/scheduled";
 
 // `createServerEntry` returns a fresh object holding only `fetch`, so anything
 // else passed to it would be dropped at runtime. The cron handler therefore
@@ -27,6 +30,19 @@ const server: ExportedHandler<Cloudflare.Env> = {
         })
         .catch((error) => {
           console.error("Reservation sweep failed", error);
+        })
+    );
+
+    // Independent of the sweep, so a provider outage does not stop retention.
+    context.waitUntil(
+      pruneSettledWebhookEvents()
+        .then((removed) => {
+          if (removed > 0) {
+            console.log(`Pruned ${removed} settled webhook events`);
+          }
+        })
+        .catch((error) => {
+          console.error("Webhook retention sweep failed", error);
         })
     );
   },

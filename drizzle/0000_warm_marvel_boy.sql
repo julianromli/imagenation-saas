@@ -49,8 +49,8 @@ CREATE TABLE `category` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `category_slug_unique` ON `category` (`slug`);--> statement-breakpoint
 CREATE TABLE `checkout_request` (
-	`id` text PRIMARY KEY NOT NULL,
 	`fingerprint` text NOT NULL,
+	`id` text PRIMARY KEY NOT NULL,
 	`order_id` text NOT NULL,
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL,
@@ -139,7 +139,6 @@ CREATE TABLE `order` (
 CREATE UNIQUE INDEX `order_number_unique` ON `order` (`order_number`);--> statement-breakpoint
 CREATE UNIQUE INDEX `order_access_token_hash_unique` ON `order` (`access_token_hash`);--> statement-breakpoint
 CREATE INDEX `order_user_id_idx` ON `order` (`user_id`);--> statement-breakpoint
-CREATE INDEX `order_status_idx` ON `order` (`status`);--> statement-breakpoint
 CREATE INDEX `order_mayar_transaction_id_idx` ON `order` (`mayar_transaction_id`);--> statement-breakpoint
 CREATE INDEX `order_reservation_expiry_idx` ON `order` (`status`,`reservation_expires_at`);--> statement-breakpoint
 CREATE TABLE `payment_attempt` (
@@ -231,6 +230,7 @@ CREATE TABLE `setup_metadata` (
 	`updated_at` integer NOT NULL
 );
 --> statement-breakpoint
+CREATE UNIQUE INDEX `setup_metadata_key_unique` ON `setup_metadata` (`key`);--> statement-breakpoint
 CREATE TABLE `user` (
 	`email` text NOT NULL,
 	`email_verified` integer DEFAULT false NOT NULL,
@@ -271,5 +271,4 @@ CREATE TABLE `webhook_event` (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `webhook_transaction_id_unique` ON `webhook_event` (`transaction_id`);--> statement-breakpoint
-CREATE INDEX `webhook_transaction_id_idx` ON `webhook_event` (`transaction_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `webhook_provider_event_unique` ON `webhook_event` (`provider`,`provider_event_id`);

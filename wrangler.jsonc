@@ -51,6 +51,14 @@
       }
     },
     {
+      "name": "CHECKOUT_LIMITER",
+      "namespace_id": "1005",
+      "simple": {
+        "limit": 10,
+        "period": 60
+      }
+    },
+    {
       "name": "WEBHOOK_LIMITER",
       "namespace_id": "1004",
       "simple": {

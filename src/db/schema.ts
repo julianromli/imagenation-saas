@@ -279,9 +279,9 @@ export const orders = sqliteTable(
     uniqueIndex("order_number_unique").on(table.orderNumber),
     uniqueIndex("order_access_token_hash_unique").on(table.accessTokenHash),
     index("order_user_id_idx").on(table.userId),
-    index("order_status_idx").on(table.status),
     index("order_mayar_transaction_id_idx").on(table.mayarTransactionId),
-    // The scheduled job scans by status and expiry. See ADR-0010.
+    // The scheduled job scans by status and expiry. See ADR-0010. Status-only
+    // lookups use this too, because status is its leading column.
     index("order_reservation_expiry_idx").on(
       table.status,
       table.reservationExpiresAt
@@ -410,7 +410,6 @@ export const webhookEvents = sqliteTable(
       table.providerEventId
     ),
     uniqueIndex("webhook_transaction_id_unique").on(table.transactionId),
-    index("webhook_transaction_id_idx").on(table.transactionId),
   ]
 );
 
@@ -451,12 +450,18 @@ export const refunds = sqliteTable(
   (table) => [index("refund_order_id_idx").on(table.orderId)]
 );
 
-export const setupMetadata = sqliteTable("setup_metadata", {
-  id: text("id").primaryKey(),
-  key: text("key").notNull(),
-  value: text("value", { mode: "json" }).$type<JsonObject>().notNull(),
-  ...timestamps,
-});
+export const setupMetadata = sqliteTable(
+  "setup_metadata",
+  {
+    id: text("id").primaryKey(),
+    key: text("key").notNull(),
+    value: text("value", { mode: "json" }).$type<JsonObject>().notNull(),
+    ...timestamps,
+  },
+  // One row per key. The constraint is what makes the setup claim a race the
+  // database decides rather than the application. See ADR-0014.
+  (table) => [uniqueIndex("setup_metadata_key_unique").on(table.key)]
+);
 
 export const authSchema = {
   account: accounts,

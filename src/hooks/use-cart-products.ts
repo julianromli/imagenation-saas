@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { useCart } from "@/components/cart-provider";
 import type { CatalogProductRow } from "@/lib/catalog.functions";
@@ -13,37 +13,51 @@ import { getProductsByIds } from "@/lib/catalog.functions";
  */
 export function useCartProducts() {
   const { lines } = useCart();
-  // A primitive dependency, so the effect reruns when the cart contents change
-  // rather than on every render that rebuilds the array.
+  // A primitive dependency, so the loader is rebuilt when the cart contents
+  // change rather than on every render that rebuilds the array.
   const idKey = [...new Set(lines.map((line) => line.productId))]
     .sort()
     .join(",");
   const [products, setProducts] = useState<CatalogProductRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  // Shared by the effect and by the retry action, so a manual retry runs the
+  // same request rather than nudging a counter the effect watches.
+  const load = useCallback(() => {
     const ids = idKey ? idKey.split(",") : [];
+    let cancelled = false;
 
     if (ids.length === 0) {
       setProducts([]);
+      setError(null);
       setLoading(false);
 
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
 
-    let cancelled = false;
-
     setLoading(true);
+    setError(null);
     getProductsByIds({ data: { ids } })
       .then((rows) => {
         if (!cancelled) {
           setProducts(rows);
         }
       })
-      .catch(() => {
-        if (!cancelled) {
-          setProducts([]);
+      .catch((requestError: unknown) => {
+        if (cancelled) {
+          return;
         }
+
+        // A failed lookup is not an empty cart. Saying so would invite the
+        // buyer to rebuild a cart that is still there.
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Unable to load your bag"
+        );
       })
       .finally(() => {
         if (!cancelled) {
@@ -56,6 +70,8 @@ export function useCartProducts() {
     };
   }, [idKey]);
 
+  useEffect(() => load(), [load]);
+
   const productById = new Map(products.map((product) => [product.id, product]));
   const items = lines.flatMap((line) => {
     const product = productById.get(line.productId);
@@ -67,5 +83,11 @@ export function useCartProducts() {
     0
   );
 
-  return { items, loading, subtotal };
+  return {
+    error,
+    items,
+    loading,
+    retry: load,
+    subtotal,
+  };
 }
