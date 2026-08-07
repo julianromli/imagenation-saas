@@ -1,15 +1,13 @@
+import { sql } from "drizzle-orm";
 import {
-  boolean,
+  check,
   index,
   integer,
-  jsonb,
-  pgEnum,
-  pgTable,
+  sqliteTable,
   text,
-  timestamp,
   unique,
   uniqueIndex,
-} from "drizzle-orm/pg-core";
+} from "drizzle-orm/sqlite-core";
 
 export type JsonValue =
   | boolean
@@ -21,16 +19,18 @@ export type JsonValue =
 export type JsonObject = { [key: string]: JsonValue };
 
 const timestamps = {
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .$defaultFn(() => new Date())
     .notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .defaultNow()
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+    .$defaultFn(() => new Date())
     .notNull(),
 };
 
-export const productStatus = pgEnum("product_status", ["active", "archived"]);
-export const orderStatus = pgEnum("order_status", [
+// SQLite has no enum type. These lists give Drizzle a typed union on the column.
+// They are not checked at runtime, so every write must go through typed code.
+export const PRODUCT_STATUS = ["active", "archived"] as const;
+export const ORDER_STATUS = [
   "pending_payment",
   "paid",
   "processing",
@@ -38,47 +38,45 @@ export const orderStatus = pgEnum("order_status", [
   "delivered",
   "cancelled",
   "refunded",
-]);
-export const paymentStatus = pgEnum("payment_status", [
+] as const;
+export const PAYMENT_STATUS = [
   "pending",
   "paid",
   "expired",
   "failed",
   "refunded",
-]);
-export const reservationStatus = pgEnum("reservation_status", [
+] as const;
+export const RESERVATION_STATUS = [
   "reserved",
   "converted",
   "released",
   "expired",
-]);
-export const paymentAttemptStatus = pgEnum("payment_attempt_status", [
+] as const;
+export const PAYMENT_ATTEMPT_STATUS = [
   "created",
   "pending",
   "paid",
   "expired",
   "failed",
   "refunded",
-]);
-export const webhookEventStatus = pgEnum("webhook_event_status", [
+] as const;
+export const WEBHOOK_EVENT_STATUS = [
   "completed",
   "received",
   "processing",
   "processed",
   "ignored",
   "failed",
-]);
-export const refundStatus = pgEnum("refund_status", [
-  "pending",
-  "completed",
-  "failed",
-]);
+] as const;
+export const REFUND_STATUS = ["pending", "completed", "failed"] as const;
 
-export const users = pgTable(
+export const users = sqliteTable(
   "user",
   {
     email: text("email").notNull(),
-    emailVerified: boolean("email_verified").default(false).notNull(),
+    emailVerified: integer("email_verified", { mode: "boolean" })
+      .default(false)
+      .notNull(),
     id: text("id").primaryKey(),
     image: text("image"),
     name: text("name").notNull(),
@@ -88,10 +86,10 @@ export const users = pgTable(
   (table) => [uniqueIndex("user_email_unique").on(table.email)]
 );
 
-export const sessions = pgTable(
+export const sessions = sqliteTable(
   "session",
   {
-    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
     id: text("id").primaryKey(),
     ipAddress: text("ip_address"),
     token: text("token").notNull(),
@@ -107,12 +105,12 @@ export const sessions = pgTable(
   ]
 );
 
-export const accounts = pgTable(
+export const accounts = sqliteTable(
   "account",
   {
     accessToken: text("access_token"),
-    accessTokenExpiresAt: timestamp("access_token_expires_at", {
-      withTimezone: true,
+    accessTokenExpiresAt: integer("access_token_expires_at", {
+      mode: "timestamp_ms",
     }),
     accountId: text("account_id").notNull(),
     id: text("id").primaryKey(),
@@ -120,8 +118,8 @@ export const accounts = pgTable(
     password: text("password"),
     providerId: text("provider_id").notNull(),
     refreshToken: text("refresh_token"),
-    refreshTokenExpiresAt: timestamp("refresh_token_expires_at", {
-      withTimezone: true,
+    refreshTokenExpiresAt: integer("refresh_token_expires_at", {
+      mode: "timestamp_ms",
     }),
     scope: text("scope"),
     userId: text("user_id")
@@ -132,10 +130,10 @@ export const accounts = pgTable(
   (table) => [index("account_user_id_idx").on(table.userId)]
 );
 
-export const verifications = pgTable(
+export const verifications = sqliteTable(
   "verification",
   {
-    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
     id: text("id").primaryKey(),
     identifier: text("identifier").notNull(),
     value: text("value").notNull(),
@@ -144,7 +142,7 @@ export const verifications = pgTable(
   (table) => [index("verification_identifier_idx").on(table.identifier)]
 );
 
-export const categories = pgTable(
+export const categories = sqliteTable(
   "category",
   {
     description: text("description"),
@@ -156,7 +154,7 @@ export const categories = pgTable(
   (table) => [uniqueIndex("category_slug_unique").on(table.slug)]
 );
 
-export const products = pgTable(
+export const products = sqliteTable(
   "product",
   {
     availableStock: integer("available_stock").default(0).notNull(),
@@ -170,32 +168,45 @@ export const products = pgTable(
     price: integer("price").notNull(),
     reservedStock: integer("reserved_stock").default(0).notNull(),
     slug: text("slug").notNull(),
-    status: productStatus("status").default("active").notNull(),
+    status: text("status", { enum: PRODUCT_STATUS })
+      .default("active")
+      .notNull(),
     ...timestamps,
   },
   (table) => [
     uniqueIndex("product_slug_unique").on(table.slug),
     index("product_category_id_idx").on(table.categoryId),
     index("product_status_idx").on(table.status),
+    // This constraint is the oversell guard. A checkout that would take stock
+    // below zero fails here, and D1 rolls back the whole batch. See ADR-0012.
+    check(
+      "product_available_stock_not_negative",
+      sql`${table.availableStock} >= 0`
+    ),
+    check(
+      "product_reserved_stock_not_negative",
+      sql`${table.reservedStock} >= 0`
+    ),
   ]
 );
 
-export const productImages = pgTable(
+export const productImages = sqliteTable(
   "product_image",
   {
     alt: text("alt").notNull(),
     id: text("id").primaryKey(),
+    // R2 object key, not a public address. See ADR-0013.
+    objectKey: text("object_key").notNull(),
     productId: text("product_id")
       .notNull()
       .references(() => products.id, { onDelete: "cascade" }),
     sortOrder: integer("sort_order").default(0).notNull(),
-    url: text("url").notNull(),
     ...timestamps,
   },
   (table) => [index("product_image_product_id_idx").on(table.productId)]
 );
 
-export const carts = pgTable(
+export const carts = sqliteTable(
   "cart",
   {
     id: text("id").primaryKey(),
@@ -207,7 +218,7 @@ export const carts = pgTable(
   (table) => [uniqueIndex("cart_user_id_unique").on(table.userId)]
 );
 
-export const cartItems = pgTable(
+export const cartItems = sqliteTable(
   "cart_item",
   {
     cartId: text("cart_id")
@@ -226,11 +237,11 @@ export const cartItems = pgTable(
   ]
 );
 
-export const orders = pgTable(
+export const orders = sqliteTable(
   "order",
   {
-    accessTokenExpiresAt: timestamp("access_token_expires_at", {
-      withTimezone: true,
+    accessTokenExpiresAt: integer("access_token_expires_at", {
+      mode: "timestamp_ms",
     }).notNull(),
     accessTokenHash: text("access_token_hash").notNull(),
     addressLine: text("address_line").notNull(),
@@ -243,16 +254,20 @@ export const orders = pgTable(
     mayarInvoiceId: text("mayar_invoice_id"),
     mayarTransactionId: text("mayar_transaction_id"),
     orderNumber: text("order_number").notNull(),
-    paidAt: timestamp("paid_at", { withTimezone: true }),
-    paymentStatus: paymentStatus("payment_status").default("pending").notNull(),
+    paidAt: integer("paid_at", { mode: "timestamp_ms" }),
+    paymentStatus: text("payment_status", { enum: PAYMENT_STATUS })
+      .default("pending")
+      .notNull(),
     paymentUrl: text("payment_url"),
     postalCode: text("postal_code").notNull(),
     province: text("province").notNull(),
-    reservationExpiresAt: timestamp("reservation_expires_at", {
-      withTimezone: true,
+    reservationExpiresAt: integer("reservation_expires_at", {
+      mode: "timestamp_ms",
     }).notNull(),
     shippingAmount: integer("shipping_amount").notNull(),
-    status: orderStatus("status").default("pending_payment").notNull(),
+    status: text("status", { enum: ORDER_STATUS })
+      .default("pending_payment")
+      .notNull(),
     subtotal: integer("subtotal").notNull(),
     total: integer("total").notNull(),
     userId: text("user_id").references(() => users.id, {
@@ -266,14 +281,21 @@ export const orders = pgTable(
     index("order_user_id_idx").on(table.userId),
     index("order_status_idx").on(table.status),
     index("order_mayar_transaction_id_idx").on(table.mayarTransactionId),
+    // The scheduled job scans by status and expiry. See ADR-0010.
+    index("order_reservation_expiry_idx").on(
+      table.status,
+      table.reservationExpiresAt
+    ),
   ]
 );
 
-export const orderItems = pgTable(
+export const orderItems = sqliteTable(
   "order_item",
   {
     id: text("id").primaryKey(),
-    imageUrl: text("image_url"),
+    // Frozen copy of the product image at purchase time, held as a key so that
+    // a later domain change does not rewrite order history. See ADR-0013.
+    imageObjectKey: text("image_object_key"),
     lineTotal: integer("line_total").notNull(),
     orderId: text("order_id")
       .notNull()
@@ -290,11 +312,26 @@ export const orderItems = pgTable(
   (table) => [index("order_item_order_id_idx").on(table.orderId)]
 );
 
-export const inventoryReservations = pgTable(
+export const checkoutRequests = sqliteTable(
+  "checkout_request",
+  {
+    fingerprint: text("fingerprint").notNull(),
+    // The idempotency key the browser sends. A repeat violates this primary key,
+    // which aborts the checkout batch and prevents a second order. See ADR-0003.
+    id: text("id").primaryKey(),
+    orderId: text("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    ...timestamps,
+  },
+  (table) => [index("checkout_request_order_id_idx").on(table.orderId)]
+);
+
+export const inventoryReservations = sqliteTable(
   "inventory_reservation",
   {
-    convertedAt: timestamp("converted_at", { withTimezone: true }),
-    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    convertedAt: integer("converted_at", { mode: "timestamp_ms" }),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
     id: text("id").primaryKey(),
     orderId: text("order_id")
       .notNull()
@@ -303,8 +340,10 @@ export const inventoryReservations = pgTable(
       .notNull()
       .references(() => products.id, { onDelete: "restrict" }),
     quantity: integer("quantity").notNull(),
-    releasedAt: timestamp("released_at", { withTimezone: true }),
-    status: reservationStatus("status").default("reserved").notNull(),
+    releasedAt: integer("released_at", { mode: "timestamp_ms" }),
+    status: text("status", { enum: RESERVATION_STATUS })
+      .default("reserved")
+      .notNull(),
     ...timestamps,
   },
   (table) => [
@@ -317,21 +356,23 @@ export const inventoryReservations = pgTable(
   ]
 );
 
-export const paymentAttempts = pgTable(
+export const paymentAttempts = sqliteTable(
   "payment_attempt",
   {
     amount: integer("amount").notNull(),
     currency: text("currency").default("IDR").notNull(),
-    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
     id: text("id").primaryKey(),
     invoiceId: text("invoice_id"),
-    metadata: jsonb("metadata").$type<JsonObject>(),
+    metadata: text("metadata", { mode: "json" }).$type<JsonObject>(),
     orderId: text("order_id")
       .notNull()
       .references(() => orders.id, { onDelete: "cascade" }),
     paymentUrl: text("payment_url"),
     provider: text("provider").default("mayar").notNull(),
-    status: paymentAttemptStatus("status").default("created").notNull(),
+    status: text("status", { enum: PAYMENT_ATTEMPT_STATUS })
+      .default("created")
+      .notNull(),
     transactionId: text("transaction_id"),
     ...timestamps,
   },
@@ -344,20 +385,22 @@ export const paymentAttempts = pgTable(
   ]
 );
 
-export const webhookEvents = pgTable(
+export const webhookEvents = sqliteTable(
   "webhook_event",
   {
     attemptCount: integer("attempt_count").default(0).notNull(),
-    completedAt: timestamp("completed_at", { withTimezone: true }),
+    completedAt: integer("completed_at", { mode: "timestamp_ms" }),
     errorMessage: text("error_message"),
     eventType: text("event_type").notNull(),
     id: text("id").primaryKey(),
-    lockedUntil: timestamp("locked_until", { withTimezone: true }),
-    payload: jsonb("payload").$type<JsonObject>().notNull(),
-    processedAt: timestamp("processed_at", { withTimezone: true }),
+    lockedUntil: integer("locked_until", { mode: "timestamp_ms" }),
+    payload: text("payload", { mode: "json" }).$type<JsonObject>().notNull(),
+    processedAt: integer("processed_at", { mode: "timestamp_ms" }),
     provider: text("provider").default("mayar").notNull(),
     providerEventId: text("provider_event_id").notNull(),
-    status: webhookEventStatus("status").default("received").notNull(),
+    status: text("status", { enum: WEBHOOK_EVENT_STATUS })
+      .default("received")
+      .notNull(),
     transactionId: text("transaction_id"),
     ...timestamps,
   },
@@ -371,7 +414,7 @@ export const webhookEvents = pgTable(
   ]
 );
 
-export const orderStatusHistory = pgTable(
+export const orderStatusHistory = sqliteTable(
   "order_status_history",
   {
     actorUserId: text("actor_user_id").references(() => users.id, {
@@ -389,7 +432,7 @@ export const orderStatusHistory = pgTable(
   (table) => [index("order_status_history_order_id_idx").on(table.orderId)]
 );
 
-export const refunds = pgTable(
+export const refunds = sqliteTable(
   "refund",
   {
     amount: integer("amount").notNull(),
@@ -400,27 +443,18 @@ export const refunds = pgTable(
       .references(() => orders.id, { onDelete: "cascade" }),
     provider: text("provider").default("mayar").notNull(),
     reason: text("reason"),
-    status: refundStatus("status").default("pending").notNull(),
+    status: text("status", { enum: REFUND_STATUS })
+      .default("pending")
+      .notNull(),
     ...timestamps,
   },
   (table) => [index("refund_order_id_idx").on(table.orderId)]
 );
 
-export const rateLimitBuckets = pgTable(
-  "rate_limit_bucket",
-  {
-    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-    id: text("id").primaryKey(),
-    requestCount: integer("request_count").default(0).notNull(),
-    ...timestamps,
-  },
-  (table) => [index("rate_limit_bucket_expiry_idx").on(table.expiresAt)]
-);
-
-export const setupMetadata = pgTable("setup_metadata", {
+export const setupMetadata = sqliteTable("setup_metadata", {
   id: text("id").primaryKey(),
   key: text("key").notNull(),
-  value: jsonb("value").$type<JsonObject>().notNull(),
+  value: text("value", { mode: "json" }).$type<JsonObject>().notNull(),
   ...timestamps,
 });
 
@@ -436,6 +470,7 @@ export const schema = {
   cartItems,
   carts,
   categories,
+  checkoutRequests,
   inventoryReservations,
   orderItems,
   orderStatusHistory,
@@ -443,7 +478,6 @@ export const schema = {
   paymentAttempts,
   productImages,
   products,
-  rateLimitBuckets,
   refunds,
   setupMetadata,
   webhookEvents,

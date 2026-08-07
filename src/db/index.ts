@@ -1,63 +1,38 @@
-import { neon, Pool } from "@neondatabase/serverless";
-import { drizzle as drizzleHttp } from "drizzle-orm/neon-http";
-import { drizzle as drizzleWebsocket } from "drizzle-orm/neon-serverless";
-
-import { getRuntimeEnv } from "@/lib/runtime-env";
+import { env } from "cloudflare:workers";
+import { drizzle } from "drizzle-orm/d1";
 
 import { schema } from "./schema";
 
-function databaseUrl(allowMissing = false) {
-  const url = getRuntimeEnv().DATABASE_URL;
+function createDatabase(binding: D1Database) {
+  return drizzle(binding, { schema });
+}
 
-  if (!url) {
-    if (allowMissing) {
-      return "https://placeholder.invalid";
-    }
+export type Database = ReturnType<typeof createDatabase>;
+export type BatchStatement = Parameters<Database["batch"]>[0][number];
 
+export function getDb() {
+  if (!env.DB) {
     throw new Error(
-      "DATABASE_URL is required. Run `bun setup` or configure your Neon database first."
+      "The DB binding is missing. Run `wrangler dev`, or check d1_databases in wrangler.jsonc."
     );
   }
 
-  return url;
+  return createDatabase(env.DB);
 }
 
-function createHttpDatabase(url: string) {
-  return drizzleHttp({
-    client: neon(url),
-    schema,
-  });
-}
-
-function createTransactionDatabase(pool: Pool) {
-  return drizzleWebsocket({
-    client: pool,
-    schema,
-  });
-}
-
-export type Database = ReturnType<typeof createHttpDatabase>;
-export type TransactionDatabase = ReturnType<typeof createTransactionDatabase>;
-export type DatabaseTransaction = Parameters<
-  TransactionDatabase["transaction"]
->[0] extends (transaction: infer T, ...args: never[]) => unknown
-  ? T
-  : never;
-
-export function getDb(options?: { allowMissing?: boolean }) {
-  return createHttpDatabase(databaseUrl(options?.allowMissing));
-}
-
-export async function withTransaction<T>(
-  callback: (transaction: DatabaseTransaction) => Promise<T>
-) {
-  const pool = new Pool({ connectionString: databaseUrl() });
-
-  try {
-    const database = createTransactionDatabase(pool);
-
-    return await database.transaction(callback);
-  } finally {
-    await pool.end();
+/**
+ * D1 has no interactive transaction. A batch is the only atomic unit, and every
+ * statement in it must be known before the first one runs. When any statement
+ * fails, D1 rolls the whole batch back.
+ *
+ * Guards therefore live in the schema rather than in a `WHERE` clause: a `WHERE`
+ * that matches nothing succeeds quietly, while a violated constraint aborts the
+ * batch. See ADR-0012.
+ */
+export function runBatch(statements: BatchStatement[]) {
+  if (statements.length === 0) {
+    return Promise.resolve([]);
   }
+
+  return getDb().batch(statements as [BatchStatement, ...BatchStatement[]]);
 }

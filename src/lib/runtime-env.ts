@@ -3,34 +3,35 @@ import { env as cloudflareEnv } from "./cloudflare-env";
 export type MayarEnvironment = "sandbox" | "production";
 
 export type RuntimeEnv = {
-  APP_URL?: string;
   BETTER_AUTH_SECRET?: string;
-  DATABASE_URL?: string;
   MAYAR_API_KEY?: string;
   MAYAR_ENV?: MayarEnvironment;
   MAYAR_ENVIRONMENT?: MayarEnvironment;
+  SETUP_TOKEN?: string;
   SHIPPING_FLAT_RATE?: string;
-  UPLOADTHING_TOKEN?: string;
 };
 
+// Node tooling reads process.env. The Worker reads its own bindings. Values
+// are strings in both, so the lookup is shared.
 const processEnv =
   typeof process === "undefined" ? {} : (process.env as RuntimeEnv);
 
 function value(name: keyof RuntimeEnv) {
-  return processEnv[name] ?? cloudflareEnv[name];
+  return (
+    processEnv[name] ??
+    (cloudflareEnv as Record<string, string | undefined>)[name]
+  );
 }
 
 export function getRuntimeEnv(): RuntimeEnv {
   const environment = value("MAYAR_ENVIRONMENT") ?? value("MAYAR_ENV");
 
   return {
-    APP_URL: value("APP_URL"),
     BETTER_AUTH_SECRET: value("BETTER_AUTH_SECRET"),
-    DATABASE_URL: value("DATABASE_URL"),
     MAYAR_API_KEY: value("MAYAR_API_KEY"),
     MAYAR_ENVIRONMENT: environment === "production" ? "production" : "sandbox",
+    SETUP_TOKEN: value("SETUP_TOKEN"),
     SHIPPING_FLAT_RATE: value("SHIPPING_FLAT_RATE"),
-    UPLOADTHING_TOKEN: value("UPLOADTHING_TOKEN"),
   };
 }
 
@@ -52,9 +53,10 @@ export function getShippingFlatRate() {
     : 0;
 }
 
+/**
+ * The public origin. A one-click deploy does not know its own URL until the
+ * deploy finishes, so the request origin is the source of truth. See ADR-0014.
+ */
 export function getAppUrl(request?: Request) {
-  return (
-    getRuntimeEnv().APP_URL ??
-    (request ? new URL(request.url).origin : "http://localhost:3000")
-  );
+  return request ? new URL(request.url).origin : "http://localhost:3000";
 }

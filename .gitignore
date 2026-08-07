@@ -5,6 +5,9 @@ dist-ssr
 *.local
 .env*
 !.env.example
+# Local Worker secrets, written by `bun run setup`.
+.dev.vars
+.dev.vars.*
 .tanstack
 .wrangler
 .output

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useCart } from "@/components/cart-provider";
 import { Button } from "@/components/ui/button";
 import { formatIdr } from "@/lib/format";
+import { productImageUrl } from "@/lib/images";
 import { cn } from "@/lib/utils";
 
 export type CatalogProduct = {
@@ -13,7 +14,7 @@ export type CatalogProduct = {
   currency: string;
   description: string;
   id: string;
-  imageUrl: string | null;
+  imageObjectKey: string | null;
   name: string;
   price: number;
   slug: string;
@@ -25,6 +26,7 @@ const productCardIconClass =
 export function ProductCard({ product }: { product: CatalogProduct }) {
   const { add } = useCart();
   const [added, setAdded] = useState(false);
+  const imageUrl = productImageUrl(product.imageObjectKey);
 
   function addToCart() {
     add({ productId: product.id, quantity: 1 });
@@ -40,12 +42,12 @@ export function ProductCard({ product }: { product: CatalogProduct }) {
         params={{ slug: product.slug }}
         to="/products/$slug"
       >
-        {product.imageUrl ? (
+        {imageUrl ? (
           <img
             alt=""
             className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
             loading="lazy"
-            src={product.imageUrl}
+            src={imageUrl}
           />
         ) : (
           <div className="flex size-full items-center justify-center text-muted-foreground text-sm">

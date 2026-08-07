@@ -4,7 +4,6 @@ import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { cartItems, carts, productImages, products } from "@/db/schema";
 import { getSession } from "@/lib/auth.functions";
-import { releaseExpiredReservations } from "@/lib/inventory";
 import { cartLinesSchema } from "@/lib/validation";
 
 async function getOrCreateCart(userId: string) {
@@ -36,7 +35,6 @@ async function getOrCreateCart(userId: string) {
 
 export const getServerCart = createServerFn({ method: "GET" }).handler(
   async () => {
-    await releaseExpiredReservations();
     const session = await getSession();
 
     if (!session) {
@@ -48,7 +46,7 @@ export const getServerCart = createServerFn({ method: "GET" }).handler(
 
     return db
       .select({
-        imageUrl: productImages.url,
+        imageObjectKey: productImages.objectKey,
         product: products,
         quantity: cartItems.quantity,
       })

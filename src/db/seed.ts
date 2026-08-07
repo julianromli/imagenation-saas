@@ -1,5 +1,8 @@
+import { env } from "cloudflare:workers";
+
 import { getDb } from "@/db";
 import { categories, productImages, products } from "@/db/schema";
+import { ALLOWED_IMAGE_TYPES, PRODUCT_IMAGE_PREFIX } from "@/lib/uploads";
 
 const seedCategories = [
   {
@@ -25,8 +28,9 @@ const seedProducts = [
     name: "Canvas tote",
     price: 189_000,
     slug: "canvas-tote",
+    sourceUrl:
+      "https://images.unsplash.com/photo-1594223274512-ad4803739b7c?auto=format&fit=crop&w=1200&q=85",
     stock: 24,
-    url: "https://images.unsplash.com/photo-1594223274512-ad4803739b7c?auto=format&fit=crop&w=1200&q=85",
   },
   {
     categoryId: "category-home",
@@ -36,8 +40,9 @@ const seedProducts = [
     name: "Stoneware cup",
     price: 125_000,
     slug: "stoneware-cup",
+    sourceUrl:
+      "https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?auto=format&fit=crop&w=1200&q=85",
     stock: 18,
-    url: "https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?auto=format&fit=crop&w=1200&q=85",
   },
   {
     categoryId: "category-home",
@@ -47,8 +52,9 @@ const seedProducts = [
     name: "Textured throw",
     price: 349_000,
     slug: "textured-throw",
+    sourceUrl:
+      "https://images.unsplash.com/photo-1584100936595-c0654b55a2e2?auto=format&fit=crop&w=1200&q=85",
     stock: 12,
-    url: "https://images.unsplash.com/photo-1584100936595-c0654b55a2e2?auto=format&fit=crop&w=1200&q=85",
   },
   {
     categoryId: "category-everyday",
@@ -58,10 +64,41 @@ const seedProducts = [
     name: "Desk bottle",
     price: 219_000,
     slug: "desk-bottle",
+    sourceUrl:
+      "https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=1200&q=85",
     stock: 30,
-    url: "https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=1200&q=85",
   },
 ];
+
+/**
+ * Copies a sample image into R2.
+ *
+ * The database holds an object key, not an address, so a remote URL cannot be
+ * stored directly. See ADR-0013. This is best effort: a product without its
+ * sample image is still a usable product, and setup must not fail because a
+ * stock photo host was unreachable.
+ */
+async function storeSeedImage(productId: string, sourceUrl: string) {
+  try {
+    const response = await fetch(sourceUrl);
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const contentType = response.headers.get("content-type") ?? "image/jpeg";
+    const extension = ALLOWED_IMAGE_TYPES.get(contentType) ?? "jpg";
+    const objectKey = `${PRODUCT_IMAGE_PREFIX}seed-${productId}.${extension}`;
+
+    await env.BUCKET.put(objectKey, await response.arrayBuffer(), {
+      httpMetadata: { contentType },
+    });
+
+    return objectKey;
+  } catch {
+    return null;
+  }
+}
 
 export async function seedDatabase() {
   const db = getDb();
@@ -70,21 +107,39 @@ export async function seedDatabase() {
   await db
     .insert(products)
     .values(
-      seedProducts.map(({ stock, url, ...product }) => ({
+      seedProducts.map(({ sourceUrl: _sourceUrl, stock, ...product }) => ({
         ...product,
         availableStock: stock,
       }))
     )
     .onConflictDoNothing();
-  await db
-    .insert(productImages)
-    .values(
-      seedProducts.map(({ id, name, url }) => ({
-        alt: name,
-        id: `${id}-image`,
-        productId: id,
-        url,
-      }))
-    )
-    .onConflictDoNothing();
+
+  const images = await Promise.all(
+    seedProducts.map(async (product) => ({
+      objectKey: await storeSeedImage(product.id, product.sourceUrl),
+      product,
+    }))
+  );
+  const stored = images.filter(
+    (
+      image
+    ): image is { objectKey: string; product: (typeof seedProducts)[number] } =>
+      image.objectKey !== null
+  );
+
+  if (stored.length > 0) {
+    await db
+      .insert(productImages)
+      .values(
+        stored.map(({ objectKey, product }) => ({
+          alt: product.name,
+          id: `${product.id}-image`,
+          objectKey,
+          productId: product.id,
+        }))
+      )
+      .onConflictDoNothing();
+  }
+
+  return { images: stored.length, products: seedProducts.length };
 }

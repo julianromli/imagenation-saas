@@ -26,3 +26,15 @@ order and linked the payment to that order.
 
 The process of comparing an order's payment status with payment confirmation
 and correcting the recorded status when the evidence matches.
+
+## checkout request
+
+A single attempt to turn a cart into an order, named by a key the buyer's
+browser chooses. The same key always names the same attempt, so a repeat of that
+attempt is recognised as the same one and never becomes a second order.
+
+## product image
+
+A picture that represents a product. It is held as an object with a stable key,
+not as an address. The public address is derived from the key at render time, so
+the key stays correct when the address changes.

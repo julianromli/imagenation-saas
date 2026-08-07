@@ -1,11 +1,66 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "then-ecommerce",
-  "main": "@tanstack/react-start/server-entry",
+  "name": "then-ecommerce-cf",
+  "main": "src/server.ts",
   "compatibility_date": "2026-08-05",
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true
+  },
+  // Bindings carry no IDs on purpose. Wrangler creates them locally on
+  // `wrangler dev` and provisions them on the account at deploy time, so this
+  // template stays free of account-specific values.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      // Drizzle Kit writes its SQL here, so Wrangler reads migrations from the
+      // same place instead of the default ./migrations.
+      "migrations_dir": "drizzle"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BUCKET"
+    }
+  ],
+  // The period must be either 10 or 60 seconds. Each distinct limit needs its
+  // own binding, and each namespace_id must be unique within the account.
+  "ratelimits": [
+    {
+      "name": "ORDER_LOOKUP_LIMITER",
+      "namespace_id": "1001",
+      "simple": {
+        "limit": 8,
+        "period": 60
+      }
+    },
+    {
+      "name": "PAYMENT_REFRESH_LIMITER",
+      "namespace_id": "1002",
+      "simple": {
+        "limit": 12,
+        "period": 60
+      }
+    },
+    {
+      "name": "ORDER_CLAIM_LIMITER",
+      "namespace_id": "1003",
+      "simple": {
+        "limit": 20,
+        "period": 60
+      }
+    },
+    {
+      "name": "WEBHOOK_LIMITER",
+      "namespace_id": "1004",
+      "simple": {
+        "limit": 60,
+        "period": 60
+      }
+    }
+  ],
+  "triggers": {
+    "crons": ["*/5 * * * *"]
   },
   "vars": {
     "MAYAR_ENVIRONMENT": "sandbox",

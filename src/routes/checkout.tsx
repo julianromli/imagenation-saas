@@ -3,39 +3,22 @@ import { ArrowLeft, LoaderCircle } from "lucide-react";
 import { useState } from "react";
 
 import { useCart } from "@/components/cart-provider";
-import type { CatalogProduct } from "@/components/product-card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getProducts } from "@/lib/catalog.functions";
+import { useCartProducts } from "@/hooks/use-cart-products";
 import { formatIdr } from "@/lib/format";
 import { createOrder } from "@/lib/order.functions";
 import { saveLastOrderHint } from "@/lib/order-access";
 
 export const Route = createFileRoute("/checkout")({
   component: CheckoutPage,
-  loader: () => getProducts({ data: {} }),
 });
 
 function CheckoutPage() {
-  const products = Route.useLoaderData() as CatalogProduct[];
   const { clear, lines } = useCart();
+  const { items, loading, subtotal } = useCartProducts();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const productMap = new Map(products.map((product) => [product.id, product]));
-  const items = lines
-    .map((line) => ({ line, product: productMap.get(line.productId) }))
-    .filter(
-      (
-        item
-      ): item is {
-        line: (typeof lines)[number];
-        product: CatalogProduct;
-      } => Boolean(item.product)
-    );
-  const subtotal = items.reduce(
-    (total, { line, product }) => total + product.price * line.quantity,
-    0
-  );
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -58,6 +41,9 @@ function CheckoutPage() {
           postalCode: String(form.get("postalCode") ?? ""),
           province: String(form.get("province") ?? ""),
         },
+        // A retry must not create a second order. The key is minted per
+        // submission attempt, so a network retry carries the same one.
+        headers: { "Idempotency-Key": crypto.randomUUID() },
       });
 
       const orderStatusPath = `/orders/${result.accessToken}`;
@@ -77,6 +63,14 @@ function CheckoutPage() {
       );
       setSubmitting(false);
     }
+  }
+
+  if (loading) {
+    return (
+      <main className="mx-auto max-w-2xl px-5 pt-20 pb-32 text-center sm:px-8">
+        <p className="text-muted-foreground text-sm">Loading your bag</p>
+      </main>
+    );
   }
 
   if (items.length === 0) {
