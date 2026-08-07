@@ -1,177 +1,100 @@
 # then. ecommerce boilerplate
 
-A single-merchant ecommerce starter built with TanStack Start, React,
-Better Auth, Drizzle ORM, Neon Postgres, Mayar V2, and UploadThing.
+A single-merchant ecommerce starter that runs entirely on Cloudflare, built with
+TanStack Start, Better Auth, Drizzle ORM, D1, R2, and Mayar V2 payments.
 
-The default demo catalog is physical IDR products with guest checkout,
-optional email/password accounts, 30-minute stock reservations, and a
-server-verified payment state.
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/julianromli/then-ecommerce-cf)
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fjulianromli%2Fthen-ecommerce&project-name=then-ecommerce&repository-name=then-ecommerce&env=DATABASE_URL,BETTER_AUTH_SECRET,MAYAR_ENVIRONMENT,MAYAR_API_KEY,UPLOADTHING_TOKEN,SHIPPING_FLAT_RATE&envDefaults=%7B%22MAYAR_ENVIRONMENT%22%3A%22sandbox%22%2C%22SHIPPING_FLAT_RATE%22%3A%220%22%7D&envDescription=Neon%20DATABASE_URL%2C%20Better%20Auth%20secret%2C%20Mayar%20environment%20(sandbox%20or%20production)%20then%20matching%20Mayar%20API%20key%2C%20UploadThing%20token%2C%20shipping%20rate.&envLink=https%3A%2F%2Fgithub.com%2Fjulianromli%2Fthen-ecommerce%23environment-variables)
-
-Prepare env values before you click. See [Path B — Deploy to Vercel](#path-b--deploy-to-vercel).
+Everything the store needs is provisioned for you. Prepare three secrets before
+you click: see [Environment variables](#environment-variables).
 
 ## Stack
 
-- TanStack Start + TanStack Router
-- React + TypeScript + Tailwind CSS + shadcn/ui
-- Better Auth with the Drizzle adapter
-- Drizzle ORM + Neon Postgres
-- Mayar V2 invoices and transaction reconciliation
-- UploadThing product image uploads
-- Vercel (primary) via Nitro; Cloudflare Workers via the Vite plugin (advanced)
+- TanStack Start (React 19) on Cloudflare Workers
+- D1 for the database, through Drizzle ORM
+- R2 for product images, uploaded and served by the Worker
+- Better Auth, self-hosted, with email and password sign-in
+- Mayar V2 for payments
+- Cloudflare rate limiting bindings and a cron trigger
 
 ## Quick start
 
-Choose one path.
+### Deploy from the button
 
-### Path A — scaffold with the CLI
+1. Click **Deploy to Cloudflare**. Cloudflare forks the repository and creates
+   the D1 database, the R2 bucket, and the rate limiters from `wrangler.jsonc`.
+2. Fill in the three secrets it asks for.
+3. When the deploy finishes, open `https://<your-worker>.workers.dev/setup` and
+   enter your setup token. That page creates your administrator account, adds
+   sample products, and shows the Mayar webhook URL to register.
 
-Requirements: Bun 1.3+, git, a Neon `DATABASE_URL`, a Mayar API key, and an
-UploadThing token.
+### Local development
 
-```bash
-bun create then-ecommerce
-```
+Requires Bun 1.3 or newer.
 
-Equivalent:
-
-```bash
-bunx create-then-ecommerce
-npm create then-ecommerce
-```
-
-The CLI shows a MAYAR banner, then prompts for:
-
-1. Project directory
-2. `DATABASE_URL`
-3. Mayar environment (1 = sandbox, recommended; 2 = production)
-4. `MAYAR_API_KEY` for that environment
-5. `UPLOADTHING_TOKEN`
-6. `APP_URL` (default `http://localhost:3000`)
-7. `SHIPPING_FLAT_RATE` (default `0`)
-8. Admin email
-9. Admin password
-
-`BETTER_AUTH_SECRET` is generated automatically. The CLI then installs
-dependencies and runs `bun setup` (migrate, seed, admin, Mayar checks).
-
-Until the package is published to npm, run it from this repo:
-
-```bash
-node ./create-then-ecommerce/bin/cli.js my-store
-```
-
-### Path B — Deploy to Vercel
-
-Prepare these values first:
-
-- Neon `DATABASE_URL`
-- Mayar environment: `sandbox` (test) or `production` (live money)
-- Matching `MAYAR_API_KEY`
-- `UPLOADTHING_TOKEN`
-- `BETTER_AUTH_SECRET` (generate before the form):
-
-```bash
-npx auth@latest secret
-```
-
-Or:
-
-```bash
-node -e "console.log(crypto.randomBytes(32).toString('base64url'))"
-```
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fjulianromli%2Fthen-ecommerce&project-name=then-ecommerce&repository-name=then-ecommerce&env=DATABASE_URL,BETTER_AUTH_SECRET,MAYAR_ENVIRONMENT,MAYAR_API_KEY,UPLOADTHING_TOKEN,SHIPPING_FLAT_RATE&envDefaults=%7B%22MAYAR_ENVIRONMENT%22%3A%22sandbox%22%2C%22SHIPPING_FLAT_RATE%22%3A%220%22%7D&envDescription=Neon%20DATABASE_URL%2C%20Better%20Auth%20secret%2C%20Mayar%20environment%20(sandbox%20or%20production)%20then%20matching%20Mayar%20API%20key%2C%20UploadThing%20token%2C%20shipping%20rate.&envLink=https%3A%2F%2Fgithub.com%2Fjulianromli%2Fthen-ecommerce%23environment-variables)
-
-Fill the env form in order: `MAYAR_ENVIRONMENT` before `MAYAR_API_KEY`.
-Do not set `APP_URL` in the button form yet — you only know the public URL
-after the first deploy.
-
-## Environment variables
-
-| Variable | Who sets it | Notes |
-| --- | --- | --- |
-| `DATABASE_URL` | You | Neon Postgres connection string |
-| `BETTER_AUTH_SECRET` | CLI auto / you on Vercel | Generated by `bun create` / `bun setup`; paste into Vercel for path B |
-| `MAYAR_ENVIRONMENT` | You | `sandbox` (default, test) or `production` (live) |
-| `MAYAR_API_KEY` | You | Must match the selected Mayar environment |
-| `UPLOADTHING_TOKEN` | You | Admin product image uploads |
-| `APP_URL` | You | Local default `http://localhost:3000`; set to the public URL after deploy |
-| `SHIPPING_FLAT_RATE` | You | IDR, default `0` |
-
-Never commit real secrets. Use `.env.local` locally.
-
-For a database-only setup, use `SETUP_SKIP_MAYAR=1`. For non-interactive
-admin bootstrap, set `ADMIN_EMAIL` and `ADMIN_PASSWORD` (`ADMIN_NAME` is
-optional and derived from the email local-part when missing).
-
-## After the first Vercel deploy
-
-1. Set `APP_URL` to your public deployment URL in the Vercel project env.
-2. Ensure `BETTER_AUTH_SECRET` matches the value you used at create time or
-   generated for the Deploy Button.
-3. From a machine with production env loaded, run setup once:
-
-```bash
-bun setup
-```
-
-4. Register the Mayar webhook (required for payment confirmation):
-
-```bash
-npx -y mayar@latest webhook register https://your-domain.example/api/webhooks/mayar
-```
-
-Mayar cannot deliver webhooks to `localhost`. Use the public deployed URL.
-
-Keep `MAYAR_ENVIRONMENT=sandbox` until checkout is verified. Switch to
-`production` only after a deliberate cutover with a production API key.
-
-The default `bun run build` uses the Nitro Vercel-compatible output.
-
-Do not run a production migration from a serverless build hook. Run
-`bun setup` or an explicit migration job once per deployment environment.
-
-## Manual local clone (optional)
-
-If you already cloned this repository:
-
-```bash
+```sh
+git clone https://github.com/julianromli/then-ecommerce-cf
+cd then-ecommerce-cf
 bun install
-cp .env.example .env.local
-# fill env values, leave BETTER_AUTH_SECRET empty to auto-generate
-bun setup
+bun run setup   # writes .dev.vars, mints secrets, migrates the local D1
 bun dev
 ```
 
-The application is available at `http://localhost:3000`.
+Then open `http://localhost:3000/setup` and use the token that `bun run setup`
+printed.
+
+## Environment variables
+
+D1, R2, and the rate limiters need no configuration. They are declared without
+IDs in `wrangler.jsonc`, so Wrangler creates them locally on `wrangler dev` and
+provisions them on your account at deploy time.
+
+| Variable | Required | What it is |
+| --- | --- | --- |
+| `BETTER_AUTH_SECRET` | Yes | Signs session cookies. Generate with `openssl rand -base64 32`. Changing it signs everyone out. |
+| `SETUP_TOKEN` | Yes | Unlocks the one-time `/setup` page. Any long random string. |
+| `MAYAR_API_KEY` | Yes | Mayar API key. Sandbox and production keys differ. |
+| `BETTER_AUTH_URL` | No | Your public URL. Without it, Better Auth reads the origin from each request. |
+| `MAYAR_ENVIRONMENT` | No | `sandbox` (default) or `production`. Set in `wrangler.jsonc`. |
+| `SHIPPING_FLAT_RATE` | No | Flat shipping in IDR, applied once per order. Set in `wrangler.jsonc`. |
+
+Keep `MAYAR_ENVIRONMENT=sandbox` until you have completed a test checkout.
+
+## After the first deploy
+
+1. Complete `/setup`.
+2. Register the Mayar webhook URL that the setup page shows. This is optional;
+   see [Payment lifecycle](#payment-lifecycle).
+3. Set `BETTER_AUTH_URL` to your public URL. Recommended: without it, the origin
+   check trusts whatever host served the request.
+4. Consider where your D1 database lives. A one-click deploy cannot choose the
+   primary location. To move it, create a database with
+   `wrangler d1 create <name> --location <hint>` and point the binding at it.
 
 ## Payment lifecycle
 
-1. The server reads the product and price from Neon.
-2. Checkout reserves available stock for 30 minutes.
-3. The server creates a Mayar invoice from the immutable order snapshot.
-4. The customer opens the invoice URL. After payment, Mayar returns to the
-   order status page when `redirectUrl` is accepted. A browser return never
-   marks an order paid by itself.
-5. The order status page can refresh payment by fetching the official Mayar
-   transaction detail for the stored transaction ID, verifying amount and
-   `paid` status, then atomically converting the reservation to sold.
-6. The webhook is stored for audit. If the payload includes the documented
-   customer email and amount, the server finds matching pending orders and
-   verifies the stored transaction detail before fulfillment. Otherwise, it
-   fails closed.
-7. The order status page retries payment checks after load and when the
-   customer returns to the page. The button remains as a manual fallback.
-8. Admin payment resync uses the same evidence gate as the customer refresh.
+1. Checkout reserves available stock for 30 minutes and writes the order,
+   its items, the reservation, and the idempotency record in a single D1 batch.
+   Overselling is refused by a check constraint, which rolls the batch back.
+2. The server creates a Mayar invoice from the order snapshot.
+3. The customer pays and returns to the order status page.
+4. Payment is proved by fetching the Mayar transaction detail and matching the
+   amount, the `paid` status, and the order in `extraData`. A browser return
+   never marks an order paid, and neither does a webhook payload on its own.
+5. The order status page checks payment on load, on a short retry schedule, and
+   when the tab regains focus.
+6. Every five minutes a cron trigger reconciles orders whose reservation has
+   expired. It asks Mayar first: a paid order is settled, an unpaid one is
+   cancelled and its stock returned, and an order it cannot verify is left for
+   the next run.
+7. Admin payment resync uses the same evidence gate as the customer refresh.
 
-The evidence gate is intentional. Do not trust `data.id` as a transaction ID.
-Only a transaction detail matched to the order in the same environment can
-confirm payment.
+**The webhook is optional.** It only makes confirmation faster. Because payment
+is always proved by a transaction lookup, and because the cron reconciles
+expired orders, a store that never registers the webhook is still correct.
 
-Refunds are completed in the Mayar dashboard and then marked as refunded in
-the admin panel. No undocumented refund endpoint is called.
+Refunds are completed in the Mayar dashboard and then marked as refunded in the
+admin panel. No undocumented refund endpoint is called.
 
 ## Routes
 
@@ -185,61 +108,48 @@ Public:
 - `/orders/:token` — signed guest order status
 - `/orders/find` — recover a guest order with email + order number
 - `/sign-in`, `/sign-up`, `/account`, `/account/orders`
-  (`/account` and `/account/orders` prompt to claim guest orders that match
-  the signed-in email)
 - `/legal/privacy`, `/legal/terms`, `/legal/shipping`, `/legal/refund`
+- `/setup` — one-time bootstrap, guarded by `SETUP_TOKEN`
 
 Admin:
 
 - `/admin` — overview
-- `/admin/products` — categories, product creation/archive, image upload
-- `/admin/orders` — order list and payment/fulfillment actions
+- `/admin/products` — categories, product creation and archive, image upload
+- `/admin/orders` — order list and payment/fulfilment actions
 - `/admin/orders/:id` — order detail, resync, status history, manual refund
 
 Server:
 
 - `/api/auth/*` — Better Auth
-- `/api/checkout` — server checkout endpoint
-- `/api/uploadthing` — UploadThing FileRouter
-- `/api/webhooks/mayar` — Mayar webhook receiver
-
-## Cloudflare Workers (advanced)
-
-Cloudflare is supported but not the primary path. Configure secrets:
-
-```bash
-wrangler secret put DATABASE_URL
-wrangler secret put MAYAR_API_KEY
-wrangler secret put UPLOADTHING_TOKEN
-wrangler secret put BETTER_AUTH_SECRET
-```
-
-Then deploy:
-
-```bash
-bun run deploy:cf
-```
-
-Set `APP_URL` and non-secret vars (including `MAYAR_ENVIRONMENT`) in the
-Worker environment. Prefer the Vercel path above unless you specifically need
-Workers.
+- `/api/checkout` — server checkout endpoint, requires an `Idempotency-Key`
+- `/api/uploads` — admin image upload to R2
+- `/images/*` — product images served from R2
+- `/api/webhooks/mayar/:secret` — Mayar webhook receiver
 
 ## Useful commands
 
-```bash
-bun run typecheck
-bun run lint
-bun run test
-bun run db:generate
-bun run db:migrate
-bun run db:seed
-bun run build
-bun run build:cf
-bun setup
+```sh
+bun dev                  # local dev server on the Workers runtime
+bun run build            # build the Worker bundle
+bun run deploy           # apply remote migrations, then deploy
+bun run db:generate      # generate a migration from the Drizzle schema
+bun run db:migrate       # apply migrations to the local D1
+bun run db:migrate:remote# apply migrations to the deployed D1
+bun run test             # unit tests and D1 tests
+bun run typecheck        # TypeScript
+bun run lint             # Biome via Ultracite
+bun run cf-typegen       # regenerate binding types after editing wrangler.jsonc
 ```
 
-## Publishing the create CLI (maintainers)
+## Design decisions
 
-The scaffolder lives in [`create-then-ecommerce/`](create-then-ecommerce/).
-See that package README for `npm publish` steps. Do not publish without an
-intentional release.
+The reasoning behind the architecture lives in [`docs/adr/`](docs/adr/), and the
+domain vocabulary in [`CONTEXT.md`](CONTEXT.md). Start with ADR-0011 for the
+database choice and ADR-0012 for how checkout stays atomic without transactions.
+
+## Notes for maintainers
+
+Wrangler writes provisioned resource IDs back into `wrangler.jsonc` after your
+own first deploy. Do not commit those IDs: they are specific to your account,
+and the bindings must stay ID-free for the deploy button to provision fresh
+resources for everyone else.

@@ -2,34 +2,43 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Minus, Plus, Trash2 } from "lucide-react";
 
 import { useCart } from "@/components/cart-provider";
-import type { CatalogProduct } from "@/components/product-card";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { getProducts } from "@/lib/catalog.functions";
+import { useCartProducts } from "@/hooks/use-cart-products";
 import { formatIdr } from "@/lib/format";
+import { productImageUrl } from "@/lib/images";
 
 export const Route = createFileRoute("/cart")({
   component: CartPage,
-  loader: () => getProducts({ data: {} }),
 });
 
 function CartPage() {
-  const products = Route.useLoaderData() as CatalogProduct[];
-  const { clear, lines, remove, setQuantity } = useCart();
-  const productMap = new Map(products.map((product) => [product.id, product]));
-  const items = lines
-    .map((line) => ({ line, product: productMap.get(line.productId) }))
-    .filter(
-      (
-        item
-      ): item is {
-        line: (typeof lines)[number];
-        product: CatalogProduct;
-      } => Boolean(item.product)
+  const { clear, remove, setQuantity } = useCart();
+  const { error, items, loading, retry, subtotal } = useCartProducts();
+
+  if (error) {
+    return (
+      <main className="mx-auto max-w-3xl px-5 pt-20 pb-32 text-center sm:px-8">
+        <h1 className="font-heading font-medium text-4xl tracking-[-0.05em]">
+          Could not load your bag.
+        </h1>
+        <p className="mt-4 text-muted-foreground text-sm">{error}</p>
+        <p className="mt-2 text-muted-foreground text-sm">
+          Your items are still saved on this device.
+        </p>
+        <Button className="mt-8 rounded-full" onClick={retry} type="button">
+          Try again
+        </Button>
+      </main>
     );
-  const subtotal = items.reduce(
-    (total, { line, product }) => total + product.price * line.quantity,
-    0
-  );
+  }
+
+  if (loading) {
+    return (
+      <main className="mx-auto max-w-3xl px-5 pt-20 pb-32 text-center sm:px-8">
+        <p className="text-muted-foreground text-sm">Loading your bag</p>
+      </main>
+    );
+  }
 
   if (items.length === 0) {
     return (
@@ -69,11 +78,11 @@ function CartPage() {
             key={product.id}
           >
             <div className="size-24 shrink-0 overflow-hidden rounded-2xl bg-muted sm:size-32">
-              {product.imageUrl ? (
+              {productImageUrl(product.imageObjectKey) ? (
                 <img
                   alt=""
                   className="size-full object-cover"
-                  src={product.imageUrl}
+                  src={productImageUrl(product.imageObjectKey) ?? ""}
                 />
               ) : null}
             </div>

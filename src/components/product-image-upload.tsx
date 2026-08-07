@@ -2,7 +2,7 @@ import { ImagePlus, LoaderCircle } from "lucide-react";
 import { type ChangeEvent, useRef, useState } from "react";
 
 import { setProductImage } from "@/lib/admin.functions";
-import { useUploadThing } from "@/lib/uploadthing-client";
+import { uploadProductImage } from "@/lib/uploads";
 import { cn } from "@/lib/utils";
 
 import { Button } from "./ui/button";
@@ -18,36 +18,7 @@ export function ProductImageUpload({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState("");
-  const { isUploading, startUpload } = useUploadThing("productImage", {
-    onClientUploadComplete: async (files) => {
-      const file = files?.[0];
-
-      if (!file?.ufsUrl) {
-        setError("Upload completed without a file URL");
-        return;
-      }
-
-      try {
-        await setProductImage({
-          data: {
-            alt: productName,
-            productId,
-            url: file.ufsUrl,
-          },
-        });
-        await onComplete();
-      } catch (uploadError) {
-        setError(
-          uploadError instanceof Error
-            ? uploadError.message
-            : "Unable to save uploaded image"
-        );
-      }
-    },
-    onUploadError: (uploadError) => {
-      setError(uploadError.message);
-    },
-  });
+  const [isUploading, setIsUploading] = useState(false);
 
   async function chooseFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -57,8 +28,25 @@ export function ProductImageUpload({
     }
 
     setError("");
-    await startUpload([file]);
-    event.target.value = "";
+    setIsUploading(true);
+
+    try {
+      const objectKey = await uploadProductImage(file);
+
+      await setProductImage({
+        data: { alt: productName, objectKey, productId },
+      });
+      await onComplete();
+    } catch (uploadError) {
+      setError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "Unable to save the uploaded image"
+      );
+    } finally {
+      setIsUploading(false);
+      event.target.value = "";
+    }
   }
 
   return (
@@ -67,6 +55,7 @@ export function ProductImageUpload({
         accept="image/*"
         aria-label={`Select image for ${productName}`}
         className="sr-only"
+        disabled={isUploading}
         id={`image-${productId}`}
         onChange={chooseFile}
         ref={inputRef}

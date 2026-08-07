@@ -41,17 +41,18 @@ import {
   createCategory,
   createProduct,
   deleteCategory,
+  getAdminCategories,
   getAdminProducts,
   setProductImage,
   updateProduct,
 } from "@/lib/admin.functions";
-import { getCategories } from "@/lib/catalog.functions";
 import { formatIdr } from "@/lib/format";
-import { useUploadThing } from "@/lib/uploadthing-client";
+import { productImageUrl } from "@/lib/images";
+import { uploadProductImage } from "@/lib/uploads";
 
 export const Route = createFileRoute("/admin/products")({
   component: AdminProducts,
-  loader: () => Promise.all([getAdminProducts(), getCategories()]),
+  loader: () => Promise.all([getAdminProducts(), getAdminCategories()]),
 });
 
 function AdminProducts() {
@@ -69,7 +70,6 @@ function AdminProducts() {
   } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const { startUpload } = useUploadThing("productImage");
 
   useEffect(() => {
     if (!imageFile) {
@@ -95,18 +95,13 @@ function AdminProducts() {
     image: File
   ): Promise<string | null> {
     try {
-      const uploadedFiles = await startUpload([image]);
-      const uploadedFile = uploadedFiles?.[0];
-
-      if (!uploadedFile?.ufsUrl) {
-        throw new Error("Image upload did not return a file URL.");
-      }
+      const objectKey = await uploadProductImage(image);
 
       await setProductImage({
         data: {
           alt: product.name,
+          objectKey,
           productId: product.id,
-          url: uploadedFile.ufsUrl,
         },
       });
       return null;
@@ -452,16 +447,16 @@ function AdminProducts() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map(({ imageUrl, product }) => (
+              {rows.map(({ imageObjectKey, product }) => (
                 <Fragment key={product.id}>
                   <TableRow>
                     <TableCell className="w-20">
                       <div className="size-16 overflow-hidden rounded-xl bg-muted">
-                        {imageUrl ? (
+                        {productImageUrl(imageObjectKey) ? (
                           <img
                             alt=""
                             className="size-full object-cover"
-                            src={imageUrl}
+                            src={productImageUrl(imageObjectKey) ?? ""}
                           />
                         ) : (
                           <div className="flex size-full flex-col items-center justify-center gap-1 text-muted-foreground text-[10px]">

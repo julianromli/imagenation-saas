@@ -1,41 +1,33 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, LoaderCircle } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { useCart } from "@/components/cart-provider";
-import type { CatalogProduct } from "@/components/product-card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getProducts } from "@/lib/catalog.functions";
+import { useCartProducts } from "@/hooks/use-cart-products";
 import { formatIdr } from "@/lib/format";
 import { createOrder } from "@/lib/order.functions";
 import { saveLastOrderHint } from "@/lib/order-access";
 
 export const Route = createFileRoute("/checkout")({
   component: CheckoutPage,
-  loader: () => getProducts({ data: {} }),
 });
 
 function CheckoutPage() {
-  const products = Route.useLoaderData() as CatalogProduct[];
   const { clear, lines } = useCart();
+  const {
+    error: cartError,
+    items,
+    loading,
+    retry,
+    subtotal,
+  } = useCartProducts();
   const [submitting, setSubmitting] = useState(false);
+  // One key for this checkout attempt. A failed submit reuses it, so a retry is
+  // recognised as the same checkout rather than a new one. See ADR-0003.
+  const idempotencyKey = useRef(crypto.randomUUID());
   const [error, setError] = useState("");
-  const productMap = new Map(products.map((product) => [product.id, product]));
-  const items = lines
-    .map((line) => ({ line, product: productMap.get(line.productId) }))
-    .filter(
-      (
-        item
-      ): item is {
-        line: (typeof lines)[number];
-        product: CatalogProduct;
-      } => Boolean(item.product)
-    );
-  const subtotal = items.reduce(
-    (total, { line, product }) => total + product.price * line.quantity,
-    0
-  );
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -58,6 +50,7 @@ function CheckoutPage() {
           postalCode: String(form.get("postalCode") ?? ""),
           province: String(form.get("province") ?? ""),
         },
+        headers: { "Idempotency-Key": idempotencyKey.current },
       });
 
       const orderStatusPath = `/orders/${result.accessToken}`;
@@ -67,6 +60,7 @@ function CheckoutPage() {
         orderNumber: result.orderNumber,
         orderStatusPath,
       });
+      idempotencyKey.current = crypto.randomUUID();
       clear();
       window.location.assign(orderStatusPath);
     } catch (submissionError) {
@@ -77,6 +71,31 @@ function CheckoutPage() {
       );
       setSubmitting(false);
     }
+  }
+
+  if (cartError) {
+    return (
+      <main className="mx-auto max-w-3xl px-5 pt-20 pb-32 text-center sm:px-8">
+        <h1 className="font-heading font-medium text-4xl tracking-[-0.05em]">
+          Could not load your bag.
+        </h1>
+        <p className="mt-4 text-muted-foreground text-sm">{cartError}</p>
+        <p className="mt-2 text-muted-foreground text-sm">
+          Your items are still saved on this device.
+        </p>
+        <Button className="mt-8 rounded-full" onClick={retry} type="button">
+          Try again
+        </Button>
+      </main>
+    );
+  }
+
+  if (loading) {
+    return (
+      <main className="mx-auto max-w-2xl px-5 pt-20 pb-32 text-center sm:px-8">
+        <p className="text-muted-foreground text-sm">Loading your bag</p>
+      </main>
+    );
   }
 
   if (items.length === 0) {

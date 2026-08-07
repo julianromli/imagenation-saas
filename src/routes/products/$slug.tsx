@@ -6,6 +6,7 @@ import { useCart } from "@/components/cart-provider";
 import { Button } from "@/components/ui/button";
 import { getProductBySlug } from "@/lib/catalog.functions";
 import { formatIdr } from "@/lib/format";
+import { productImageUrl } from "@/lib/images";
 import { cn } from "@/lib/utils";
 
 type ProductDetail = {
@@ -13,7 +14,7 @@ type ProductDetail = {
   categoryName: string | null;
   description: string;
   id: string;
-  imageUrl: string | null;
+  imageObjectKey: string | null;
   name: string;
   price: number;
   slug: string;
@@ -29,6 +30,7 @@ function ProductPage() {
   const { add } = useCart();
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
+  const imageUrl = productImageUrl(product.imageObjectKey);
 
   function addProduct() {
     add({ productId: product.id, quantity });
@@ -48,11 +50,11 @@ function ProductPage() {
 
       <div className="mt-8 grid gap-10 md:grid-cols-[1.05fr_0.95fr] md:gap-16">
         <div className="aspect-[4/5] overflow-hidden rounded-[2rem] bg-muted">
-          {product.imageUrl ? (
+          {imageUrl ? (
             <img
               alt={product.name}
               className="size-full object-cover"
-              src={product.imageUrl}
+              src={imageUrl}
             />
           ) : (
             <div className="flex size-full items-center justify-center text-muted-foreground">

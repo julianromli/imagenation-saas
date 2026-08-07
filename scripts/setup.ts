@@ -1,207 +1,94 @@
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { createInterface } from "node:readline/promises";
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 
-import dotenv from "dotenv";
-import { eq } from "drizzle-orm";
+/**
+ * Prepares a local development environment.
+ *
+ * This script only does the work that needs a terminal: write .dev.vars, mint
+ * secrets, and apply migrations to the local D1. Creating the administrator and
+ * seeding the catalogue happen at /setup, so that one-click deploys and local
+ * clones follow the same path. See ADR-0014.
+ */
 
-dotenv.config();
-dotenv.config({ path: ".env.local" });
-
-const authSecretPattern = /(^|\n)BETTER_AUTH_SECRET=.*(?=\n|$)/;
+const ENV_PATH = ".dev.vars";
+const SETUP_TOKEN_LINE = /^SETUP_TOKEN=(.+)$/m;
 
 function fail(message: string): never {
   console.error(`Setup failed: ${message}`);
   process.exit(1);
 }
 
-function run(command: string, args: string[], env = process.env) {
-  const result = spawnSync(command, args, {
-    env,
-    stdio: "inherit",
-  });
+function run(command: string, args: string[]) {
+  const result = spawnSync(command, args, { stdio: "inherit" });
 
   if (result.status !== 0) {
     fail(`${command} ${args.join(" ")} exited with status ${result.status}`);
   }
 }
 
-function ensureAuthSecret() {
-  if (process.env.BETTER_AUTH_SECRET) {
-    return;
-  }
-
-  const secret = randomBytes(32).toString("base64url");
-  const envPath = ".env.local";
-  const current = existsSync(envPath) ? readFileSync(envPath, "utf8") : "";
-  const line = `BETTER_AUTH_SECRET=${secret}`;
-  const updated = authSecretPattern.test(current)
-    ? current.replace(authSecretPattern, `$1${line}`)
-    : `${current.trimEnd()}${current.trimEnd() ? "\n" : ""}${line}\n`;
-
-  writeFileSync(envPath, updated, { mode: 0o600 });
-
-  process.env.BETTER_AUTH_SECRET = secret;
-  console.log("Generated BETTER_AUTH_SECRET in .env.local");
+function readDevVars() {
+  return existsSync(ENV_PATH) ? readFileSync(ENV_PATH, "utf8") : "";
 }
 
-function deriveAdminName(email: string) {
-  const local = email.split("@")[0]?.trim();
-  return local && local.length > 0 ? local : "Admin";
+function hasKey(contents: string, key: string) {
+  return new RegExp(`^${key}=.+$`, "m").test(contents);
 }
 
-async function promptAdmin() {
-  const adminEmail = process.env.ADMIN_EMAIL;
-  const adminPassword = process.env.ADMIN_PASSWORD;
-  const adminName =
-    process.env.ADMIN_NAME ??
-    (adminEmail ? deriveAdminName(adminEmail) : undefined);
+function appendKey(key: string, value: string) {
+  const current = readDevVars();
+  const separator = current.length > 0 && !current.endsWith("\n") ? "\n" : "";
 
-  if (adminEmail && adminName && adminPassword) {
-    return { adminEmail, adminName, adminPassword };
-  }
-
-  if (!process.stdin.isTTY) {
-    console.log(
-      "Skipping admin bootstrap. Set ADMIN_EMAIL and ADMIN_PASSWORD for CI (ADMIN_NAME optional)."
-    );
-    return null;
-  }
-
-  const readline = createInterface({
-    input: process.stdin,
-    output: process.stdout,
+  writeFileSync(ENV_PATH, `${current}${separator}${key}=${value}\n`, {
+    mode: 0o600,
   });
+  // `mode` only applies when the file is created, and this file holds secrets.
+  chmodSync(ENV_PATH, 0o600);
+  console.log(`Generated ${key} in ${ENV_PATH}`);
+}
 
-  try {
-    const email = adminEmail ?? (await readline.question("Admin email: "));
-    let password = adminPassword ?? "";
-    if (!password) {
-      password = await readline.question("Admin password (min 8 characters): ");
-    }
+function ensureSecrets() {
+  const contents = readDevVars();
 
-    if (!email || password.length < 8) {
-      fail(
-        "Admin email is required and password must be at least 8 characters"
-      );
-    }
+  if (!hasKey(contents, "BETTER_AUTH_SECRET")) {
+    appendKey("BETTER_AUTH_SECRET", randomBytes(32).toString("base64url"));
+  }
 
-    return {
-      adminEmail: email,
-      adminName: adminName ?? deriveAdminName(email),
-      adminPassword: password,
-    };
-  } finally {
-    readline.close();
+  if (!hasKey(readDevVars(), "SETUP_TOKEN")) {
+    appendKey("SETUP_TOKEN", randomBytes(24).toString("base64url"));
   }
 }
 
-async function bootstrapAdmin() {
-  const input = await promptAdmin();
+function reportMissing() {
+  const contents = readDevVars();
+  const missing = ["MAYAR_API_KEY"].filter((key) => !hasKey(contents, key));
 
-  if (!input) {
-    return;
-  }
-
-  const [{ auth }, { getDb }, { users }] = await Promise.all([
-    import("../src/lib/auth"),
-    import("../src/db"),
-    import("../src/db/schema"),
-  ]);
-  const db = getDb();
-  const existing = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, input.adminEmail))
-    .limit(1);
-
-  if (!existing[0]) {
-    await auth.api.signUpEmail({
-      body: {
-        email: input.adminEmail,
-        name: input.adminName,
-        password: input.adminPassword,
-      },
-    });
-  }
-
-  await db
-    .update(users)
-    .set({ role: "admin", updatedAt: new Date() })
-    .where(eq(users.email, input.adminEmail));
-
-  console.log(`Admin ready: ${input.adminEmail}`);
-}
-
-function validateMayar() {
-  if (process.env.SETUP_SKIP_MAYAR === "1") {
-    console.log("Skipping Mayar validation because SETUP_SKIP_MAYAR=1");
-    return;
-  }
-
-  if (!process.env.MAYAR_API_KEY) {
-    fail(
-      "Set MAYAR_API_KEY or use SETUP_SKIP_MAYAR=1 for a database-only setup"
+  if (missing.length > 0) {
+    console.log(
+      `\nAdd these to ${ENV_PATH} before checkout will work: ${missing.join(", ")}`
     );
-  }
-
-  const environment = process.env.MAYAR_ENVIRONMENT ?? "sandbox";
-  const mayarEnv = {
-    ...process.env,
-    MAYAR_API_KEY: process.env.MAYAR_API_KEY,
-    NODE_ENV: environment === "sandbox" ? "development" : "production",
-  };
-
-  run("npx", ["-y", "mayar@latest", "whoami", "--json"], mayarEnv);
-
-  if (process.env.APP_URL) {
-    run(
-      "npx",
-      [
-        "-y",
-        "mayar@latest",
-        "webhook",
-        "register",
-        `${process.env.APP_URL}/api/webhooks/mayar`,
-      ],
-      mayarEnv
-    );
-  } else {
-    console.log("APP_URL is not set; register the Mayar webhook manually.");
   }
 }
 
 function printNextSteps() {
-  console.log("Setup complete");
-  console.log();
-  console.log("Next steps:");
-  console.log("  bun dev");
-  console.log();
-  console.log("After the first Vercel deploy:");
-  console.log("  1. Set APP_URL to your public deployment URL.");
-  console.log("  2. Ensure BETTER_AUTH_SECRET matches this environment.");
-  console.log("  3. Register the Mayar webhook:");
+  const token =
+    readDevVars().match(SETUP_TOKEN_LINE)?.[1] ?? "your setup token";
+
+  console.log("\nSetup complete. Next steps:");
+  console.log("  1. bun dev");
+  console.log("  2. Open http://localhost:3000/setup");
+  console.log(`  3. Use this setup token: ${token}`);
   console.log(
-    "     npx -y mayar@latest webhook register https://your-domain.example/api/webhooks/mayar"
+    "\nThe setup page creates your administrator, seeds the catalogue, and"
   );
-  console.log(
-    "  4. Keep MAYAR_ENVIRONMENT=sandbox until checkout is verified."
-  );
+  console.log("shows the Mayar webhook URL to register.");
 }
 
-async function main() {
-  if (!process.env.DATABASE_URL) {
-    fail("Set DATABASE_URL to a Neon Postgres connection string");
-  }
-
-  ensureAuthSecret();
-  run("bun", ["x", "drizzle-kit", "migrate"]);
-  const { seedDatabase } = await import("../src/db/seed");
-  await seedDatabase();
-  await bootstrapAdmin();
-  validateMayar();
+function main() {
+  ensureSecrets();
+  run("bunx", ["wrangler", "d1", "migrations", "apply", "DB", "--local"]);
+  reportMissing();
   printNextSteps();
 }
 
-await main();
+main();

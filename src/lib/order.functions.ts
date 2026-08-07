@@ -1,8 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 import { and, asc, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 
-import { getDb, withTransaction } from "@/db";
+import { type BatchStatement, getDb, runBatch } from "@/db";
 import {
+  checkoutRequests,
   inventoryReservations,
   orderItems,
   orders,
@@ -17,10 +19,7 @@ import {
   createOrderNumber,
   hashToken,
 } from "@/lib/ids";
-import {
-  releaseExpiredReservations,
-  releaseOrderReservation,
-} from "@/lib/inventory";
+import { releaseOrderReservation } from "@/lib/inventory";
 import {
   createMayarInvoice,
   createMayarVerificationPayload,
@@ -28,22 +27,18 @@ import {
 } from "@/lib/mayar";
 import { processMayarWebhook } from "@/lib/payment.functions";
 import { consumeRateLimit } from "@/lib/rate-limit";
-import {
-  getAppUrl,
-  getRuntimeEnv,
-  getShippingFlatRate,
-} from "@/lib/runtime-env";
+import { getRuntimeEnv, getShippingFlatRate } from "@/lib/runtime-env";
 import type { CheckoutInput } from "@/lib/validation";
 import { checkoutSchema, orderLookupSchema } from "@/lib/validation";
 
 const RESERVATION_MINUTES = 30;
 const ORDER_TOKEN_DAYS = 30;
-const LOOKUP_RATE_LIMIT = 8;
-const LOOKUP_WINDOW_MS = 60_000;
-const REFRESH_RATE_LIMIT = 12;
-const REFRESH_WINDOW_MS = 60_000;
-const CLAIM_RATE_LIMIT = 20;
-const CLAIM_WINDOW_MS = 60_000;
+const UNIQUE_VIOLATION = /UNIQUE constraint failed/i;
+const CHECK_VIOLATION = /CHECK constraint failed/i;
+const MAX_IDEMPOTENCY_KEY_LENGTH = 255;
+// Printable ASCII only. The value is stored as a primary key and echoed in
+// errors, so control characters have no business in it.
+const PRINTABLE_ASCII = /^[\x20-\x7E]+$/;
 
 function expiresInMinutes(minutes: number) {
   return new Date(Date.now() + minutes * 60 * 1000);
@@ -53,8 +48,39 @@ function expiresInDays(days: number) {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 }
 
-function orderStatusUrl(accessToken: string) {
-  return `${getAppUrl()}/orders/${accessToken}`;
+// The public origin is taken from the request rather than from configuration.
+// A one-click deploy does not know its own URL in advance. See ADR-0014.
+//
+// `getRequest()` is server-only, so it is called inside handler bodies, which
+// the client build strips. Module-level helpers take the origin as an argument.
+function currentOrigin() {
+  return new URL(getRequest().url).origin;
+}
+
+function orderStatusUrl(origin: string, accessToken: string) {
+  return `${origin}/orders/${accessToken}`;
+}
+
+// Identifies the cart and delivery details behind an idempotency key, so that a
+// replayed key carrying different data is refused. See ADR-0003.
+function checkoutFingerprint(data: CheckoutInput) {
+  const lines = [...data.lines]
+    .sort((left, right) => left.productId.localeCompare(right.productId))
+    .map((line) => `${line.productId}x${line.quantity}`)
+    .join(",");
+
+  return hashToken(
+    [
+      data.email.trim().toLowerCase(),
+      data.guestName.trim(),
+      data.phone.trim(),
+      data.addressLine.trim(),
+      data.city.trim(),
+      data.province.trim(),
+      data.postalCode.trim(),
+      lines,
+    ].join("|")
+  );
 }
 
 async function requireMatchingGuestOrder(orderId: string, email: string) {
@@ -85,92 +111,219 @@ async function requireMatchingGuestOrder(orderId: string, email: string) {
   return order;
 }
 
+async function reissueAccessToken(orderId: string) {
+  const accessToken = createAccessToken();
+
+  await getDb()
+    .update(orders)
+    .set({
+      accessTokenExpiresAt: expiresInDays(ORDER_TOKEN_DAYS),
+      accessTokenHash: await hashToken(accessToken),
+      updatedAt: new Date(),
+    })
+    .where(eq(orders.id, orderId));
+
+  return accessToken;
+}
+
+/**
+ * Answers a retry that carries an idempotency key already on record.
+ *
+ * The original response held an access token, and only its hash is stored, so a
+ * fresh token is issued for the same order. Only a client holding the original
+ * key can reach this path.
+ */
+async function replayCheckout(
+  idempotencyKey: string,
+  fingerprint: string,
+  origin: string
+) {
+  const [existing] = await getDb()
+    .select({
+      fingerprint: checkoutRequests.fingerprint,
+      orderId: checkoutRequests.orderId,
+    })
+    .from(checkoutRequests)
+    .where(eq(checkoutRequests.id, idempotencyKey))
+    .limit(1);
+
+  if (!existing) {
+    return null;
+  }
+
+  if (existing.fingerprint !== fingerprint) {
+    throw new Error(
+      "This idempotency key was already used for a different checkout"
+    );
+  }
+
+  const [order] = await getDb()
+    .select({
+      orderNumber: orders.orderNumber,
+      paymentUrl: orders.paymentUrl,
+      total: orders.total,
+    })
+    .from(orders)
+    .where(eq(orders.id, existing.orderId))
+    .limit(1);
+
+  if (!order) {
+    throw new Error(
+      "The original order for this checkout is no longer available"
+    );
+  }
+
+  const accessToken = await reissueAccessToken(existing.orderId);
+
+  return {
+    accessToken,
+    orderNumber: order.orderNumber,
+    orderStatusUrl: orderStatusUrl(origin, accessToken),
+    paymentUrl: order.paymentUrl,
+    total: order.total,
+  };
+}
+
+async function describeStockShortfall(
+  lines: CheckoutInput["lines"]
+): Promise<string> {
+  const rows = await getDb()
+    .select({
+      availableStock: products.availableStock,
+      id: products.id,
+      name: products.name,
+    })
+    .from(products)
+    .where(
+      inArray(
+        products.id,
+        lines.map((line) => line.productId)
+      )
+    );
+  const stockById = new Map(rows.map((row) => [row.id, row]));
+  const short = lines.find((line) => {
+    const row = stockById.get(line.productId);
+
+    return !row || row.availableStock < line.quantity;
+  });
+
+  return short
+    ? `${stockById.get(short.productId)?.name ?? "A product"} does not have enough stock`
+    : "One or more products do not have enough stock";
+}
+
 export const createOrder = createServerFn({ method: "POST" })
   .validator((data: unknown) => checkoutSchema.parse(data))
-  .handler(({ data }) => createOrderForCheckout(data));
+  .handler(async ({ data }) => {
+    const request = getRequest();
+    const idempotencyKey = request.headers.get("Idempotency-Key")?.trim();
 
-export async function createOrderForCheckout(data: CheckoutInput) {
-  await releaseExpiredReservations();
+    if (!idempotencyKey) {
+      throw new Error("Checkout requires an Idempotency-Key header");
+    }
+
+    if (
+      idempotencyKey.length > MAX_IDEMPOTENCY_KEY_LENGTH ||
+      !PRINTABLE_ASCII.test(idempotencyKey)
+    ) {
+      throw new Error("That Idempotency-Key is not a valid value");
+    }
+
+    // Checkout writes rows and calls a paid provider API, so it is rate limited
+    // like every other public write path. The email is the key, because a guest
+    // checkout has no session to key on.
+    await consumeRateLimit(
+      "CHECKOUT_LIMITER",
+      `checkout:${data.email.trim().toLowerCase()}`
+    );
+
+    return createOrderForCheckout(
+      data,
+      idempotencyKey,
+      new URL(request.url).origin
+    );
+  });
+
+export async function createOrderForCheckout(
+  data: CheckoutInput,
+  idempotencyKey: string,
+  origin: string
+) {
+  const fingerprint = await checkoutFingerprint(data);
+  const replayed = await replayCheckout(idempotencyKey, fingerprint, origin);
+
+  if (replayed) {
+    return replayed;
+  }
+
   const session = await getSession();
   const accessToken = createAccessToken();
   const accessTokenHash = await hashToken(accessToken);
   const orderId = createId();
   const orderNumber = createOrderNumber();
+  const now = new Date();
   const reservationExpiresAt = expiresInMinutes(RESERVATION_MINUTES);
   const accessTokenExpiresAt = expiresInDays(ORDER_TOKEN_DAYS);
   const shippingAmount = getShippingFlatRate();
-  const statusUrl = orderStatusUrl(accessToken);
+  const statusUrl = orderStatusUrl(origin, accessToken);
   const lineIds = [...new Set(data.lines.map((line) => line.productId))];
 
   if (lineIds.length !== data.lines.length) {
     throw new Error("Remove duplicate products from your cart before checkout");
   }
 
-  const prepared = await withTransaction(async (transaction) => {
-    const rows = await transaction
-      .select({
-        imageUrl: productImages.url,
-        product: products,
-      })
-      .from(products)
-      .leftJoin(
-        productImages,
-        and(
-          eq(productImages.productId, products.id),
-          eq(productImages.sortOrder, 0)
-        )
+  const db = getDb();
+  const rows = await db
+    .select({
+      imageObjectKey: productImages.objectKey,
+      product: products,
+    })
+    .from(products)
+    .leftJoin(
+      productImages,
+      and(
+        eq(productImages.productId, products.id),
+        eq(productImages.sortOrder, 0)
       )
-      .where(and(inArray(products.id, lineIds), eq(products.status, "active")));
+    )
+    .where(and(inArray(products.id, lineIds), eq(products.status, "active")));
+  const productById = new Map(rows.map((row) => [row.product.id, row]));
 
-    const productById = new Map(rows.map((row) => [row.product.id, row]));
+  if (productById.size !== lineIds.length) {
+    throw new Error("One or more products are no longer available");
+  }
 
-    if (productById.size !== lineIds.length) {
+  const lineItems = data.lines.map((line) => {
+    const row = productById.get(line.productId);
+
+    if (!row) {
       throw new Error("One or more products are no longer available");
     }
 
-    const lineItems = data.lines.map((line) => {
-      const row = productById.get(line.productId);
+    return { imageObjectKey: row.imageObjectKey, line, product: row.product };
+  });
+  const subtotal = lineItems.reduce(
+    (sum, { line, product }) => sum + product.price * line.quantity,
+    0
+  );
+  const total = subtotal + shippingAmount;
 
-      if (!row) {
-        throw new Error("One or more products are no longer available");
-      }
+  // One batch. The stock guard is the check constraint on the product row, and
+  // the duplicate guard is the primary key on checkout_request. Either one
+  // failing rolls the whole checkout back. See ADR-0012 and ADR-0003.
+  const statements: BatchStatement[] = lineItems.map(({ line, product }) =>
+    db
+      .update(products)
+      .set({
+        availableStock: sql`${products.availableStock} - ${line.quantity}`,
+        reservedStock: sql`${products.reservedStock} + ${line.quantity}`,
+        updatedAt: now,
+      })
+      .where(eq(products.id, product.id))
+  );
 
-      return {
-        imageUrl: row.imageUrl,
-        line,
-        product: row.product,
-      };
-    });
-
-    let subtotal = 0;
-
-    for (const item of lineItems) {
-      // biome-ignore lint/performance/noAwaitInLoops: Stock reservations must be checked serially inside one transaction.
-      const updated = await transaction
-        .update(products)
-        .set({
-          availableStock: sql`${products.availableStock} - ${item.line.quantity}`,
-          reservedStock: sql`${products.reservedStock} + ${item.line.quantity}`,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(products.id, item.product.id),
-            sql`${products.availableStock} >= ${item.line.quantity}`
-          )
-        )
-        .returning({ id: products.id });
-
-      if (updated.length === 0) {
-        throw new Error(`${item.product.name} does not have enough stock`);
-      }
-
-      subtotal += item.product.price * item.line.quantity;
-    }
-
-    const total = subtotal + shippingAmount;
-
-    await transaction.insert(orders).values({
+  statements.push(
+    db.insert(orders).values({
       accessTokenExpiresAt,
       accessTokenHash,
       addressLine: data.addressLine,
@@ -190,12 +343,11 @@ export async function createOrderForCheckout(data: CheckoutInput) {
       subtotal,
       total,
       userId: session?.user.id,
-    });
-
-    await transaction.insert(orderItems).values(
-      lineItems.map(({ imageUrl, line, product }) => ({
+    }),
+    db.insert(orderItems).values(
+      lineItems.map(({ imageObjectKey, line, product }) => ({
         id: createId(),
-        imageUrl,
+        imageObjectKey,
         lineTotal: product.price * line.quantity,
         orderId,
         productId: product.id,
@@ -204,9 +356,8 @@ export async function createOrderForCheckout(data: CheckoutInput) {
         quantity: line.quantity,
         unitPrice: product.price,
       }))
-    );
-
-    await transaction.insert(inventoryReservations).values(
+    ),
+    db.insert(inventoryReservations).values(
       lineItems.map(({ line, product }) => ({
         expiresAt: reservationExpiresAt,
         id: createId(),
@@ -215,28 +366,51 @@ export async function createOrderForCheckout(data: CheckoutInput) {
         quantity: line.quantity,
         status: "reserved" as const,
       }))
-    );
-
-    return {
-      lineItems,
+    ),
+    // Inserted after the order, because it points at it. Order within a batch
+    // does not affect atomicity.
+    db.insert(checkoutRequests).values({
+      fingerprint,
+      id: idempotencyKey,
       orderId,
-      orderNumber,
-      subtotal,
-      total,
-    };
-  });
+    })
+  );
+
+  try {
+    await runBatch(statements);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+
+    if (CHECK_VIOLATION.test(message)) {
+      // The constraint does not say which product ran out, so ask afterwards to
+      // build a message a buyer can act on. See ADR-0012.
+      throw new Error(await describeStockShortfall(data.lines), {
+        cause: error,
+      });
+    }
+
+    if (UNIQUE_VIOLATION.test(message)) {
+      const raced = await replayCheckout(idempotencyKey, fingerprint, origin);
+
+      if (raced) {
+        return raced;
+      }
+    }
+
+    throw error;
+  }
 
   try {
     const invoice = await createMayarInvoice({
-      description: `Order ${prepared.orderNumber}`,
+      description: `Order ${orderNumber}`,
       email: data.email,
       expiredAt: reservationExpiresAt.toISOString(),
       extraData: {
-        orderId: prepared.orderId,
-        orderNumber: prepared.orderNumber,
+        orderId,
+        orderNumber,
       },
       items: [
-        ...prepared.lineItems.map(({ line, product }) => ({
+        ...lineItems.map(({ line, product }) => ({
           description: product.name,
           quantity: line.quantity,
           rate: product.price,
@@ -255,9 +429,10 @@ export async function createOrderForCheckout(data: CheckoutInput) {
       name: data.guestName,
       redirectUrl: statusUrl,
     });
-    await withTransaction(async (transaction) => {
-      await transaction.insert(paymentAttempts).values({
-        amount: prepared.total,
+
+    await runBatch([
+      db.insert(paymentAttempts).values({
+        amount: total,
         currency: "IDR",
         expiresAt: reservationExpiresAt,
         id: createId(),
@@ -265,12 +440,12 @@ export async function createOrderForCheckout(data: CheckoutInput) {
         metadata: {
           environment: getRuntimeEnv().MAYAR_ENVIRONMENT ?? "sandbox",
         },
-        orderId: prepared.orderId,
+        orderId,
         paymentUrl: invoice.link,
         status: "pending",
         transactionId: invoice.transactionId,
-      });
-      await transaction
+      }),
+      db
         .update(orders)
         .set({
           mayarInvoiceId: invoice.id,
@@ -278,18 +453,28 @@ export async function createOrderForCheckout(data: CheckoutInput) {
           paymentUrl: invoice.link,
           updatedAt: new Date(),
         })
-        .where(eq(orders.id, prepared.orderId));
-    });
+        .where(eq(orders.id, orderId)),
+    ]);
 
     return {
       accessToken,
-      orderNumber: prepared.orderNumber,
+      orderNumber,
       orderStatusUrl: statusUrl,
       paymentUrl: invoice.link,
-      total: prepared.total,
+      total,
     };
   } catch (error) {
-    await releaseOrderReservation(prepared.orderId, "payment_creation_failed");
+    // The invoice failure is what the caller needs to see. A cleanup that also
+    // fails must not replace it, or the real cause is lost.
+    await releaseOrderReservation(orderId, "payment_creation_failed").catch(
+      (releaseError) => {
+        console.error(
+          `Failed to release reservation for ${orderId} after invoice creation failed`,
+          releaseError
+        );
+      }
+    );
+
     throw error;
   }
 }
@@ -441,11 +626,7 @@ export const claimGuestOrderById = createServerFn({ method: "POST" })
       throw new Error("Sign in before claiming an order");
     }
 
-    await consumeRateLimit({
-      key: `claim-guest:${session.user.id}`,
-      limit: CLAIM_RATE_LIMIT,
-      windowMs: CLAIM_WINDOW_MS,
-    });
+    await consumeRateLimit("ORDER_CLAIM_LIMITER", `claim:${session.user.id}`);
 
     const order = await requireMatchingGuestOrder(
       data.orderId,
@@ -469,51 +650,32 @@ export const openClaimableGuestOrder = createServerFn({ method: "POST" })
       throw new Error("Sign in before opening an order");
     }
 
-    await consumeRateLimit({
-      key: `open-guest:${session.user.id}`,
-      limit: CLAIM_RATE_LIMIT,
-      windowMs: CLAIM_WINDOW_MS,
-    });
+    await consumeRateLimit("ORDER_CLAIM_LIMITER", `open:${session.user.id}`);
 
+    const origin = currentOrigin();
     const order = await requireMatchingGuestOrder(
       data.orderId,
       session.user.email
     );
-
-    const accessToken = createAccessToken();
-    const accessTokenHash = await hashToken(accessToken);
-    const accessTokenExpiresAt = expiresInDays(ORDER_TOKEN_DAYS);
-
-    await getDb()
-      .update(orders)
-      .set({
-        accessTokenExpiresAt,
-        accessTokenHash,
-        updatedAt: new Date(),
-      })
-      .where(eq(orders.id, order.id));
+    const accessToken = await reissueAccessToken(order.id);
 
     return {
       accessToken,
       orderNumber: order.orderNumber,
-      orderStatusUrl: orderStatusUrl(accessToken),
+      orderStatusUrl: orderStatusUrl(origin, accessToken),
     };
   });
 
 export const findOrderAccess = createServerFn({ method: "POST" })
   .validator((data: unknown) => orderLookupSchema.parse(data))
   .handler(async ({ data }) => {
+    const origin = currentOrigin();
     const email = data.email.trim().toLowerCase();
     const orderNumber = data.orderNumber.trim().toUpperCase();
 
-    await consumeRateLimit({
-      key: `order-lookup:${email}`,
-      limit: LOOKUP_RATE_LIMIT,
-      windowMs: LOOKUP_WINDOW_MS,
-    });
+    await consumeRateLimit("ORDER_LOOKUP_LIMITER", `lookup:${email}`);
 
-    const db = getDb();
-    const [order] = await db
+    const [order] = await getDb()
       .select({
         guestEmail: orders.guestEmail,
         id: orders.id,
@@ -527,23 +689,12 @@ export const findOrderAccess = createServerFn({ method: "POST" })
       throw new Error("No order matched that email and order number");
     }
 
-    const accessToken = createAccessToken();
-    const accessTokenHash = await hashToken(accessToken);
-    const accessTokenExpiresAt = expiresInDays(ORDER_TOKEN_DAYS);
-
-    await db
-      .update(orders)
-      .set({
-        accessTokenExpiresAt,
-        accessTokenHash,
-        updatedAt: new Date(),
-      })
-      .where(eq(orders.id, order.id));
+    const accessToken = await reissueAccessToken(order.id);
 
     return {
       accessToken,
       orderNumber: order.orderNumber,
-      orderStatusUrl: orderStatusUrl(accessToken),
+      orderStatusUrl: orderStatusUrl(origin, accessToken),
     };
   });
 
@@ -552,14 +703,9 @@ export const refreshOrderPayment = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const tokenHash = await hashToken(data.token);
 
-    await consumeRateLimit({
-      key: `order-refresh:${tokenHash}`,
-      limit: REFRESH_RATE_LIMIT,
-      windowMs: REFRESH_WINDOW_MS,
-    });
+    await consumeRateLimit("PAYMENT_REFRESH_LIMITER", `refresh:${tokenHash}`);
 
-    const db = getDb();
-    const [order] = await db
+    const [order] = await getDb()
       .select({
         id: orders.id,
         paymentStatus: orders.paymentStatus,
@@ -588,7 +734,6 @@ export const refreshOrderPayment = createServerFn({ method: "POST" })
     }
 
     const transaction = await getMayarTransaction(order.transactionId);
-
     const result = await processMayarWebhook(
       createMayarVerificationPayload(
         `customer-refresh-${order.id}-${Date.now()}`,

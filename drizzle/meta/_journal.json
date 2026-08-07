@@ -1,26 +1,12 @@
 {
   "version": "7",
-  "dialect": "postgresql",
+  "dialect": "sqlite",
   "entries": [
     {
       "idx": 0,
-      "version": "7",
-      "when": 1785937813238,
-      "tag": "0000_common_sersi",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1785938143484,
-      "tag": "0001_worried_edwin_jarvis",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1785992374053,
-      "tag": "0002_flaky_stone_men",
+      "version": "6",
+      "when": 1786087502103,
+      "tag": "0000_warm_marvel_boy",
       "breakpoints": true
     }
   ]

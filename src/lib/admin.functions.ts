@@ -1,8 +1,9 @@
+import { env } from "cloudflare:workers";
 import { createServerFn } from "@tanstack/react-start";
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, asc, count, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { getDb, withTransaction } from "@/db";
+import { getDb } from "@/db";
 import {
   categories,
   orderItems,
@@ -30,6 +31,8 @@ const transitions: Record<string, string[]> = {
   shipped: ["processing"],
 };
 const categorySlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+// Keys this application minted, and nothing else in the bucket.
+const productImageKeyPattern = /^products\/[a-z0-9-]+\.(avif|jpg|png|webp)$/;
 
 export const getAdminStats = createServerFn({ method: "GET" }).handler(
   async () => {
@@ -56,7 +59,7 @@ export const getAdminProducts = createServerFn({ method: "GET" }).handler(
 
     return getDb()
       .select({
-        imageUrl: productImages.url,
+        imageObjectKey: productImages.objectKey,
         product: products,
       })
       .from(products)
@@ -165,31 +168,69 @@ export const setProductImage = createServerFn({ method: "POST" })
     z
       .object({
         alt: z.string().trim().min(1).max(160),
+        objectKey: z
+          .string()
+          .trim()
+          .max(512)
+          // A free-form string would let an admin point a product at any object.
+          .regex(productImageKeyPattern),
         productId: z.string().min(1),
-        url: z.url(),
       })
       .parse(data)
   )
   .handler(async ({ data }) => {
     await ensureAdmin();
 
-    return withTransaction(async (transaction) => {
-      await transaction
+    const db = getDb();
+    const replaced = await db
+      .select({ objectKey: productImages.objectKey })
+      .from(productImages)
+      .where(eq(productImages.productId, data.productId));
+    const [, inserted] = await db.batch([
+      db
         .delete(productImages)
-        .where(eq(productImages.productId, data.productId));
-      const [image] = await transaction
+        .where(eq(productImages.productId, data.productId)),
+      db
         .insert(productImages)
         .values({
           alt: data.alt,
           id: createId(),
+          objectKey: data.objectKey,
           productId: data.productId,
-          url: data.url,
         })
-        .returning();
+        .returning(),
+    ]);
 
-      return image;
-    });
+    // Best effort. An orphaned object costs storage; a failed delete must not
+    // undo a product update that already succeeded. See ADR-0013.
+    await Promise.allSettled(
+      replaced
+        .filter((image) => image.objectKey !== data.objectKey)
+        .map((image) => env.BUCKET.delete(image.objectKey))
+    );
+
+    return inserted[0];
   });
+
+/**
+ * Categories for the admin screen, without the shared cache the public
+ * catalogue carries. An admin who creates or deletes a category must see the
+ * result on the next load, not up to a minute later.
+ */
+export const getAdminCategories = createServerFn({ method: "GET" }).handler(
+  async () => {
+    await ensureAdmin();
+
+    return getDb()
+      .select({
+        id: categories.id,
+        name: categories.name,
+        slug: categories.slug,
+      })
+      .from(categories)
+      .orderBy(asc(categories.name));
+  }
+);
 
 export const getAdminOrders = createServerFn({ method: "GET" }).handler(
   async () => {
@@ -240,36 +281,47 @@ export const updateOrderStatus = createServerFn({ method: "POST" })
       throw new Error("Use the payment reconciliation action for this status");
     }
 
-    return withTransaction(async (transaction) => {
-      const [order] = await transaction
-        .select()
-        .from(orders)
-        .where(eq(orders.id, data.orderId))
-        .limit(1);
+    const db = getDb();
+    const [order] = await db
+      .select()
+      .from(orders)
+      .where(eq(orders.id, data.orderId))
+      .limit(1);
 
-      if (!order) {
-        throw new Error("Order not found");
-      }
+    if (!order) {
+      throw new Error("Order not found");
+    }
 
-      if (!transitions[data.status]?.includes(order.status)) {
-        throw new Error(`Cannot move ${order.status} to ${data.status}`);
-      }
+    if (!transitions[data.status]?.includes(order.status)) {
+      throw new Error(`Cannot move ${order.status} to ${data.status}`);
+    }
 
-      await transaction
+    // The transition was validated against the status read a moment ago, so the
+    // write repeats that status as its own precondition. Without it, two
+    // administrators acting at once could both pass a check the other invalidated.
+    const [updated] = await db.batch([
+      db
         .update(orders)
         .set({ status: data.status, updatedAt: new Date() })
-        .where(eq(orders.id, order.id));
-      await transaction.insert(orderStatusHistory).values({
+        .where(and(eq(orders.id, order.id), eq(orders.status, order.status)))
+        .returning({ id: orders.id }),
+      db.insert(orderStatusHistory).values({
         actorUserId: session.user.id,
         fromStatus: order.status,
         id: createId(),
         note: data.note,
         orderId: order.id,
         toStatus: data.status,
-      });
+      }),
+    ]);
 
-      return { status: data.status };
-    });
+    if (updated.length === 0) {
+      throw new Error(
+        "This order changed while you were working on it. Reload and try again."
+      );
+    }
+
+    return { status: data.status };
   });
 
 export const resyncOrderPayment = createServerFn({ method: "POST" })
@@ -305,47 +357,57 @@ export const markOrderRefunded = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const session = await ensureAdmin();
 
-    return withTransaction(async (transaction) => {
-      const [order] = await transaction
-        .select()
-        .from(orders)
-        .where(eq(orders.id, data.id))
-        .limit(1);
+    const db = getDb();
+    const [order] = await db
+      .select()
+      .from(orders)
+      .where(eq(orders.id, data.id))
+      .limit(1);
 
-      if (order?.paymentStatus !== "paid") {
-        throw new Error("Only paid orders can be marked refunded");
-      }
+    if (order?.paymentStatus !== "paid") {
+      throw new Error("Only paid orders can be marked refunded");
+    }
 
-      await transaction
+    const now = new Date();
+
+    const [refunded] = await db.batch([
+      db
         .update(orders)
         .set({
           paymentStatus: "refunded",
           status: "refunded",
-          updatedAt: new Date(),
+          updatedAt: now,
         })
-        .where(eq(orders.id, order.id));
-      await transaction
+        .where(and(eq(orders.id, order.id), eq(orders.paymentStatus, "paid")))
+        .returning({ id: orders.id }),
+      db
         .update(paymentAttempts)
-        .set({ status: "refunded", updatedAt: new Date() })
-        .where(eq(paymentAttempts.orderId, order.id));
-      await transaction.insert(refunds).values({
+        .set({ status: "refunded", updatedAt: now })
+        .where(eq(paymentAttempts.orderId, order.id)),
+      db.insert(refunds).values({
         amount: order.total,
         id: createId(),
         orderId: order.id,
         reason: data.reason,
         status: "completed",
-      });
-      await transaction.insert(orderStatusHistory).values({
+      }),
+      db.insert(orderStatusHistory).values({
         actorUserId: session.user.id,
         fromStatus: order.status,
         id: createId(),
         note: "Marked after manual refund in Mayar dashboard",
         orderId: order.id,
         toStatus: "refunded",
-      });
+      }),
+    ]);
 
-      return { status: "refunded" as const };
-    });
+    if (refunded.length === 0) {
+      throw new Error(
+        "This order is no longer marked paid. Reload and try again."
+      );
+    }
+
+    return { status: "refunded" as const };
   });
 
 export const getWebhookEvents = createServerFn({ method: "GET" }).handler(

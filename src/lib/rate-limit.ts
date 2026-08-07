@@ -1,46 +1,21 @@
-import { and, eq, gt, sql } from "drizzle-orm";
+import { env } from "cloudflare:workers";
 
-import { getDb } from "@/db";
-import { rateLimitBuckets } from "@/db/schema";
-import { hashToken } from "@/lib/ids";
+/**
+ * Rate limits run on the Cloudflare binding rather than on database counters.
+ * Counting is per Cloudflare location and deliberately permissive, which is
+ * enough for these paths. See ADR-0015.
+ */
+export type LimiterName =
+  | "CHECKOUT_LIMITER"
+  | "ORDER_CLAIM_LIMITER"
+  | "ORDER_LOOKUP_LIMITER"
+  | "PAYMENT_REFRESH_LIMITER"
+  | "WEBHOOK_LIMITER";
 
-export async function consumeRateLimit(input: {
-  key: string;
-  limit: number;
-  windowMs: number;
-}) {
-  const windowStart = Math.floor(Date.now() / input.windowMs) * input.windowMs;
-  const bucketId = await hashToken(`${input.key}:${windowStart}`);
-  const expiresAt = new Date(windowStart + input.windowMs);
-  const db = getDb();
+export async function consumeRateLimit(limiter: LimiterName, key: string) {
+  const { success } = await env[limiter].limit({ key });
 
-  await db
-    .insert(rateLimitBuckets)
-    .values({
-      expiresAt,
-      id: bucketId,
-      requestCount: 1,
-    })
-    .onConflictDoUpdate({
-      set: {
-        requestCount: sql`${rateLimitBuckets.requestCount} + 1`,
-        updatedAt: new Date(),
-      },
-      target: rateLimitBuckets.id,
-    });
-
-  const [bucket] = await db
-    .select({ requestCount: rateLimitBuckets.requestCount })
-    .from(rateLimitBuckets)
-    .where(
-      and(
-        eq(rateLimitBuckets.id, bucketId),
-        gt(rateLimitBuckets.expiresAt, new Date())
-      )
-    )
-    .limit(1);
-
-  if ((bucket?.requestCount ?? Number.POSITIVE_INFINITY) > input.limit) {
+  if (!success) {
     throw new Error("Too many attempts. Wait a minute and try again.");
   }
 }

@@ -13,11 +13,18 @@ const searchSchema = z.object({
   search: z.string().optional(),
 });
 
-// biome-ignore assist/source/useSortedKeys: TanStack Router requires validateSearch before loader.
+// biome-ignore assist/source/useSortedKeys: TanStack Router requires validateSearch before loaderDeps.
 export const Route = createFileRoute("/products/")({
   component: ProductsPage,
   validateSearch: searchSchema,
-  loader: () => Promise.all([getCategories(), getProducts({ data: {} })]),
+  loaderDeps: ({ search }) => ({
+    category: search.category,
+    search: search.search,
+  }),
+  // Filtering happens in SQL. The page used to fetch every product and filter
+  // in the browser, which shipped the whole catalogue on every search.
+  loader: ({ deps }) =>
+    Promise.all([getCategories(), getProducts({ data: deps })]),
 });
 
 function ProductsPage() {
@@ -28,16 +35,6 @@ function ProductsPage() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: "/products/" });
   const [value, setValue] = useState(search.search ?? "");
-  const visibleProducts = products.filter((product) => {
-    const matchesSearch =
-      !search.search ||
-      product.name.toLowerCase().includes(search.search.toLowerCase());
-    const matchesCategory =
-      !search.category ||
-      product.categoryName?.toLowerCase() === search.category;
-
-    return matchesSearch && matchesCategory;
-  });
 
   const submitSearch = useCallback(
     async (event: React.FormEvent<HTMLFormElement>) => {
@@ -103,9 +100,9 @@ function ProductsPage() {
         ))}
       </div>
 
-      {visibleProducts.length > 0 ? (
+      {products.length > 0 ? (
         <div className="grid gap-x-5 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
-          {visibleProducts.map((product) => (
+          {products.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
         </div>
