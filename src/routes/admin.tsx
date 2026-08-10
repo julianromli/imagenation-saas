@@ -4,14 +4,17 @@ import {
   Outlet,
   redirect,
 } from "@tanstack/react-router";
-import { LayoutDashboard, Package, ShoppingCart } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingCart, Tags } from "lucide-react";
 
 import { ensureAdmin } from "@/lib/auth.functions";
 
 const adminNavItems = [
-  { icon: LayoutDashboard, label: "Overview", to: "/admin" },
-  { icon: Package, label: "Products", to: "/admin/products" },
-  { icon: ShoppingCart, label: "Orders", to: "/admin/orders" },
+  // Overview matches exactly. Without it, "/admin" counts as active on every
+  // page below it and the whole nav reads as selected.
+  { exact: true, icon: LayoutDashboard, label: "Overview", to: "/admin" },
+  { exact: false, icon: Package, label: "Products", to: "/admin/products" },
+  { exact: false, icon: Tags, label: "Categories", to: "/admin/categories" },
+  { exact: false, icon: ShoppingCart, label: "Orders", to: "/admin/orders" },
 ] as const;
 
 export const Route = createFileRoute("/admin")({
@@ -35,8 +38,9 @@ function AdminLayout() {
           Admin
         </h1>
         <nav aria-label="Admin navigation" className="mt-7 grid gap-1">
-          {adminNavItems.map(({ icon: Icon, label, to }) => (
+          {adminNavItems.map(({ exact, icon: Icon, label, to }) => (
             <Link
+              activeOptions={{ exact }}
               className="inline-flex min-h-11 items-center gap-3 rounded-xl px-3 text-muted-foreground text-sm transition-colors hover:bg-muted hover:text-foreground [&.active]:bg-muted [&.active]:text-foreground"
               key={to}
               to={to}

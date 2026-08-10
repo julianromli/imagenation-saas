@@ -65,6 +65,8 @@ export type CatalogProductRow = ReturnType<typeof flatten>[number];
 export const getCategories = createServerFn({ method: "GET" }).handler(() => {
   cacheCatalogResponse();
 
+  // Only categories a shopper can actually land in. Without the join an empty
+  // category still renders a filter chip that leads to a dead-end page.
   return getDb()
     .select({
       id: categories.id,
@@ -72,6 +74,14 @@ export const getCategories = createServerFn({ method: "GET" }).handler(() => {
       slug: categories.slug,
     })
     .from(categories)
+    .innerJoin(
+      products,
+      and(
+        eq(products.categoryId, categories.id),
+        eq(products.status, "active" as const)
+      )
+    )
+    .groupBy(categories.id)
     .orderBy(asc(categories.name));
 });
 

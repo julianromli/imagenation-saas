@@ -21,7 +21,7 @@ export type CatalogProduct = {
 };
 
 const productCardIconClass =
-  "absolute inset-0 size-4 transition-[filter,opacity,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)]";
+  "absolute inset-0 size-4 transition-[filter,opacity,transform] duration-150 ease-out-strong";
 
 export function ProductCard({ product }: { product: CatalogProduct }) {
   const { add } = useCart();

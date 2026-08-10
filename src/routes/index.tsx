@@ -16,17 +16,17 @@ function Home() {
     <main>
       <section className="mx-auto grid max-w-7xl gap-10 px-5 pt-16 pb-20 sm:px-8 md:grid-cols-[1.2fr_0.8fr] md:items-center md:pt-24">
         <div>
-          <p className="mb-6 text-muted-foreground text-sm">
+          <p className="rise-in mb-6 text-muted-foreground text-sm [--n:0]">
             The first collection
           </p>
-          <h1 className="max-w-3xl text-balance font-heading font-medium text-5xl tracking-[-0.06em] sm:text-7xl">
+          <h1 className="rise-in max-w-3xl text-balance font-heading font-medium text-5xl tracking-[-0.06em] [--n:1] sm:text-7xl">
             Objects with a place in your everyday.
           </h1>
-          <p className="mt-7 max-w-xl text-base text-muted-foreground leading-7 sm:text-lg">
+          <p className="rise-in mt-7 max-w-xl text-base text-muted-foreground leading-7 [--n:2] sm:text-lg">
             Small-batch goods, chosen for how they feel to use and how quietly
             they fit into a life.
           </p>
-          <div className="mt-8 flex flex-wrap gap-3">
+          <div className="rise-in mt-8 flex flex-wrap gap-3 [--n:3]">
             <Link className={buttonVariants({ size: "lg" })} to="/products">
               Browse the collection
             </Link>
@@ -38,7 +38,7 @@ function Home() {
             </a>
           </div>
         </div>
-        <div className="relative aspect-[4/5] overflow-hidden rounded-[2rem] bg-muted md:ml-auto md:w-full md:max-w-sm">
+        <div className="rise-in relative aspect-[4/5] overflow-hidden rounded-[2rem] bg-muted [--n:2] md:ml-auto md:w-full md:max-w-sm">
           <img
             alt="A considered home interior with warm natural textures"
             className="size-full object-cover"
@@ -72,7 +72,7 @@ function Home() {
           </Link>
         </div>
         {products.length > 0 ? (
-          <div className="grid gap-x-5 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rise-in-children grid gap-x-5 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
             {products.slice(0, 4).map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}

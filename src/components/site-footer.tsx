@@ -62,14 +62,14 @@ export function SiteFooter() {
                 <div className="mt-5 flex flex-col items-start gap-3">
                   {group.links.map((link) => (
                     <Link
-                      className="group inline-flex items-center gap-1 text-background/70 text-sm transition-[color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-background active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-background"
+                      className="group inline-flex items-center gap-1 text-background/70 text-sm transition-[color,transform] duration-150 ease-out-quint hover:text-background active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-background"
                       key={link.to}
                       to={link.to}
                     >
                       {link.label}
                       <ArrowUpRight
                         aria-hidden="true"
-                        className="size-3.5 -translate-x-0.5 translate-y-0.5 opacity-0 transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover:translate-x-0 group-hover:translate-y-0 group-hover:opacity-100"
+                        className="size-3.5 -translate-x-0.5 translate-y-0.5 opacity-0 transition-[opacity,transform] duration-150 ease-out-quint group-hover:translate-x-0 group-hover:translate-y-0 group-hover:opacity-100"
                       />
                     </Link>
                   ))}

@@ -8,6 +8,8 @@
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: 'Geist Variable', sans-serif;
+    --ease-out-quint: var(--curve-out-quint);
+    --ease-out-strong: var(--curve-out-strong);
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,6 +51,10 @@
 }
 
 :root {
+    /* Motion curves. Kept outside @theme so hand-written CSS below can read
+       them too — @theme inline does not emit its own custom properties. */
+    --curve-out-quint: cubic-bezier(0.23, 1, 0.32, 1);
+    --curve-out-strong: cubic-bezier(0.2, 0, 0, 1);
     --background: oklch(1 0 0);
     --foreground: oklch(0.145 0 0);
     --card: oklch(1 0 0);
@@ -130,4 +136,69 @@
   html {
     @apply font-sans;
     }
+}
+
+@layer components {
+  /* First-run entrance. `backwards` fill holds the from-state during the
+     delay, so the resting state stays authoritative if the animation
+     never runs. Stagger by setting --n on each child. */
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      translate: 0 8px;
+      filter: blur(2px);
+    }
+  }
+
+  .rise-in {
+    animation: rise-in 350ms var(--curve-out-quint) backwards;
+    animation-delay: calc(var(--n, 0) * 90ms);
+  }
+
+  .rise-in-children > * {
+    animation: rise-in 350ms var(--curve-out-quint) backwards;
+  }
+  .rise-in-children > *:nth-child(2) { animation-delay: 90ms; }
+  .rise-in-children > *:nth-child(3) { animation-delay: 180ms; }
+  .rise-in-children > *:nth-child(4) { animation-delay: 270ms; }
+  .rise-in-children > *:nth-child(n + 5) { animation-delay: 360ms; }
+
+  /* A derived value settling on its new number. */
+  @keyframes bump-in {
+    from {
+      opacity: 0;
+      translate: 0 4px;
+    }
+  }
+
+  .bump-in {
+    animation: bump-in 140ms var(--curve-out-quint) backwards;
+  }
+
+  /* One-shot acknowledgement that a counter changed. */
+  @keyframes badge-pop {
+    0% { scale: 1; }
+    35% { scale: 1.25; }
+    100% { scale: 1; }
+  }
+
+  .badge-pop {
+    animation: badge-pop 320ms var(--curve-out-quint);
+  }
+}
+
+/* Reduced motion. Deliberately unlayered: unlayered declarations outrank
+   every layered one, so this wins over Tailwind's utilities without
+   !important. 1ms rather than `none` so listeners that wait on
+   transitionend/animationend — Base UI's popups do — still fire. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-delay: 0s;
+    animation-duration: 1ms;
+    animation-iteration-count: 1;
+    transition-delay: 0s;
+    transition-duration: 1ms;
+  }
 }

@@ -1,19 +1,104 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Minus, Plus, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { useCart } from "@/components/cart-provider";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useCartProducts } from "@/hooks/use-cart-products";
 import { formatIdr } from "@/lib/format";
 import { productImageUrl } from "@/lib/images";
+import { EXIT_DURATION_MS, prefersReducedMotion } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/cart")({
   component: CartPage,
 });
 
+/**
+ * A value derived from the cart, such as a line total. It settles into its new
+ * number so the eye is drawn to what the last click actually changed. It stays
+ * still until `animate` turns on, so nothing moves on page load.
+ */
+function DerivedAmount({
+  animate,
+  className,
+  value,
+}: {
+  animate: boolean;
+  className?: string;
+  value: string;
+}) {
+  return (
+    <span className={cn(className, animate && "bump-in")} key={value}>
+      {value}
+    </span>
+  );
+}
+
 function CartPage() {
   const { clear, remove, setQuantity } = useCart();
   const { error, items, loading, retry, subtotal } = useCartProducts();
+  const [leaving, setLeaving] = useState<string[]>([]);
+  const [changedByUser, setChangedByUser] = useState(false);
+  const exitTimers = useRef<number[]>([]);
+
+  useEffect(
+    () => () => {
+      for (const timer of exitTimers.current) {
+        window.clearTimeout(timer);
+      }
+    },
+    []
+  );
+
+  function afterExit(commit: () => void) {
+    const timer = window.setTimeout(() => {
+      commit();
+      exitTimers.current = exitTimers.current.filter((id) => id !== timer);
+    }, EXIT_DURATION_MS);
+
+    exitTimers.current.push(timer);
+  }
+
+  function changeQuantity(productId: string, quantity: number) {
+    setChangedByUser(true);
+    setQuantity(productId, quantity);
+  }
+
+  function removeItem(productId: string) {
+    setChangedByUser(true);
+
+    if (prefersReducedMotion()) {
+      remove(productId);
+      return;
+    }
+
+    // A second click inside the exit window must not queue a second timer.
+    if (leaving.includes(productId)) {
+      return;
+    }
+
+    setLeaving((current) => [...current, productId]);
+    afterExit(() => {
+      remove(productId);
+      setLeaving((current) => current.filter((id) => id !== productId));
+    });
+  }
+
+  function clearCart() {
+    setChangedByUser(true);
+
+    if (prefersReducedMotion()) {
+      clear();
+      return;
+    }
+
+    setLeaving(items.map(({ product }) => product.id));
+    afterExit(() => {
+      clear();
+      setLeaving([]);
+    });
+  }
 
   if (error) {
     return (
@@ -66,7 +151,7 @@ function CartPage() {
             Ready when you are.
           </h1>
         </div>
-        <Button onClick={clear} variant="ghost">
+        <Button onClick={clearCart} variant="ghost">
           Clear bag
         </Button>
       </div>
@@ -74,7 +159,8 @@ function CartPage() {
       <div className="divide-y divide-border">
         {items.map(({ line, product }) => (
           <div
-            className="flex gap-4 py-6 sm:items-center sm:gap-6"
+            className="flex gap-4 py-6 transition-[opacity,transform] duration-150 ease-in data-leaving:pointer-events-none data-leaving:-translate-y-2 data-leaving:opacity-0 sm:items-center sm:gap-6"
+            data-leaving={leaving.includes(product.id) ? "" : undefined}
             key={product.id}
           >
             <div className="size-24 shrink-0 overflow-hidden rounded-2xl bg-muted sm:size-32">
@@ -101,7 +187,7 @@ function CartPage() {
                 <Button
                   aria-label={`Decrease ${product.name} quantity`}
                   disabled={line.quantity <= 1}
-                  onClick={() => setQuantity(product.id, line.quantity - 1)}
+                  onClick={() => changeQuantity(product.id, line.quantity - 1)}
                   size="icon-sm"
                   variant="outline"
                 >
@@ -113,7 +199,7 @@ function CartPage() {
                 <Button
                   aria-label={`Increase ${product.name} quantity`}
                   disabled={line.quantity >= product.availableStock}
-                  onClick={() => setQuantity(product.id, line.quantity + 1)}
+                  onClick={() => changeQuantity(product.id, line.quantity + 1)}
                   size="icon-sm"
                   variant="outline"
                 >
@@ -122,12 +208,14 @@ function CartPage() {
               </div>
             </div>
             <div className="flex flex-col items-end gap-3">
-              <p className="font-medium text-sm">
-                {formatIdr(product.price * line.quantity)}
-              </p>
+              <DerivedAmount
+                animate={changedByUser}
+                className="font-medium text-sm"
+                value={formatIdr(product.price * line.quantity)}
+              />
               <Button
                 aria-label={`Remove ${product.name}`}
-                onClick={() => remove(product.id)}
+                onClick={() => removeItem(product.id)}
                 size="icon-sm"
                 variant="ghost"
               >
@@ -141,7 +229,11 @@ function CartPage() {
       <div className="mt-8 ml-auto max-w-sm border-t pt-6">
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">Subtotal</span>
-          <span className="font-medium">{formatIdr(subtotal)}</span>
+          <DerivedAmount
+            animate={changedByUser}
+            className="font-medium"
+            value={formatIdr(subtotal)}
+          />
         </div>
         <p className="mt-3 text-muted-foreground text-xs leading-5">
           Flat-rate shipping is calculated at checkout.

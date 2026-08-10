@@ -16,6 +16,12 @@ type CartContextValue = {
   add: (line: CartLine) => void;
   clear: () => void;
   count: number;
+  /**
+   * False until the stored cart has been read on the client. Consumers use it
+   * to tell the hydration jump from 0 apart from a real user change, so they
+   * do not animate on page load.
+   */
+  hydrated: boolean;
   lines: CartLine[];
   remove: (productId: string) => void;
   setQuantity: (productId: string, quantity: number) => void;
@@ -116,11 +122,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
       add,
       clear,
       count: lines.reduce((total, line) => total + line.quantity, 0),
+      hydrated,
       lines,
       remove,
       setQuantity,
     }),
-    [add, clear, lines, remove, setQuantity]
+    [add, clear, hydrated, lines, remove, setQuantity]
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

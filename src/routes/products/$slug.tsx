@@ -115,7 +115,7 @@ function ProductPage() {
                 <Plus
                   aria-hidden="true"
                   className={cn(
-                    "absolute inset-0 size-4 transition-[filter,opacity,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)]",
+                    "absolute inset-0 size-4 transition-[filter,opacity,transform] duration-150 ease-out-strong",
                     added
                       ? "scale-[0.25] opacity-0 blur-[4px]"
                       : "scale-100 opacity-100 blur-0"
@@ -124,7 +124,7 @@ function ProductPage() {
                 <Check
                   aria-hidden="true"
                   className={cn(
-                    "absolute inset-0 size-4 transition-[filter,opacity,transform] duration-150 ease-[cubic-bezier(0.2,0,0,1)]",
+                    "absolute inset-0 size-4 transition-[filter,opacity,transform] duration-150 ease-out-strong",
                     added
                       ? "scale-100 opacity-100 blur-0"
                       : "scale-[0.25] opacity-0 blur-[4px]"

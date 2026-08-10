@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { createServerFn } from "@tanstack/react-start";
-import { and, asc, count, desc, eq } from "drizzle-orm";
+import { and, asc, count, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { getDb } from "@/db";
@@ -33,6 +33,26 @@ const transitions: Record<string, string[]> = {
 const categorySlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 // Keys this application minted, and nothing else in the bucket.
 const productImageKeyPattern = /^products\/[a-z0-9-]+\.(avif|jpg|png|webp)$/;
+
+const categoryInputSchema = z.object({
+  description: z.string().trim().max(500).optional(),
+  name: z.string().trim().min(2).max(80),
+  slug: z.string().trim().min(2).max(80).regex(categorySlugPattern),
+});
+
+/**
+ * Turns the `category_slug_unique` violation into something an admin can act
+ * on. The driver otherwise surfaces the raw SQLite constraint text.
+ */
+function asSlugError(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+
+  if (message.includes("category_slug_unique") || message.includes("UNIQUE")) {
+    return new Error("That slug is already used by another category.");
+  }
+
+  return error instanceof Error ? error : new Error("Unable to save category.");
+}
 
 export const getAdminStats = createServerFn({ method: "GET" }).handler(
   async () => {
@@ -96,28 +116,50 @@ export const createProduct = createServerFn({ method: "POST" })
   });
 
 export const createCategory = createServerFn({ method: "POST" })
+  .validator((data: unknown) => categoryInputSchema.parse(data))
+  .handler(async ({ data }) => {
+    await ensureAdmin();
+
+    try {
+      const [category] = await getDb()
+        .insert(categories)
+        .values({
+          description: data.description,
+          id: createId(),
+          name: data.name,
+          slug: data.slug,
+        })
+        .returning();
+
+      return category;
+    } catch (error) {
+      throw asSlugError(error);
+    }
+  });
+
+export const updateCategory = createServerFn({ method: "POST" })
   .validator((data: unknown) =>
-    z
-      .object({
-        description: z.string().trim().max(500).optional(),
-        name: z.string().trim().min(2).max(80),
-        slug: z.string().trim().min(2).max(80).regex(categorySlugPattern),
-      })
-      .parse(data)
+    categoryInputSchema.extend({ id: z.string().min(1) }).parse(data)
   )
   .handler(async ({ data }) => {
     await ensureAdmin();
-    const [category] = await getDb()
-      .insert(categories)
-      .values({
-        description: data.description,
-        id: createId(),
-        name: data.name,
-        slug: data.slug,
-      })
-      .returning();
 
-    return category;
+    try {
+      const [category] = await getDb()
+        .update(categories)
+        .set({
+          description: data.description,
+          name: data.name,
+          slug: data.slug,
+          updatedAt: new Date(),
+        })
+        .where(eq(categories.id, data.id))
+        .returning();
+
+      return category;
+    } catch (error) {
+      throw asSlugError(error);
+    }
   });
 
 export const deleteCategory = createServerFn({ method: "POST" })
@@ -125,6 +167,8 @@ export const deleteCategory = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await ensureAdmin();
 
+    // Products keep existing. The category_id foreign key is `set null`, so
+    // every product in this category becomes uncategorised. See schema.ts.
     await getDb().delete(categories).where(eq(categories.id, data.id));
   });
 
@@ -214,20 +258,28 @@ export const setProductImage = createServerFn({ method: "POST" })
 
 /**
  * Categories for the admin screen, without the shared cache the public
- * catalogue carries. An admin who creates or deletes a category must see the
- * result on the next load, not up to a minute later.
+ * catalogue carries. An admin who creates, edits, or deletes a category must
+ * see the result on the next load, not up to a minute later.
  */
 export const getAdminCategories = createServerFn({ method: "GET" }).handler(
   async () => {
     await ensureAdmin();
 
+    // Two counts, because they answer different questions. `activeProducts` is
+    // what a shopper can reach, so it says whether the category earns its
+    // place. `totalProducts` is what a delete would detach, archived included.
     return getDb()
       .select({
+        activeProducts: sql<number>`sum(case when ${products.status} = 'active' then 1 else 0 end)`,
+        description: categories.description,
         id: categories.id,
         name: categories.name,
         slug: categories.slug,
+        totalProducts: sql<number>`count(${products.id})`,
       })
       .from(categories)
+      .leftJoin(products, eq(products.categoryId, categories.id))
+      .groupBy(categories.id)
       .orderBy(asc(categories.name));
   }
 );
