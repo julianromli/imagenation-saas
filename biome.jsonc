@@ -8,6 +8,10 @@
   ],
   "files": {
     "includes": [
+      // Vendored agent skills. They carry their own scripts, none of it ships
+      // to the Worker, and reformatting somebody else's tool to this store's
+      // rules would be wrong.
+      "!.agents",
       "!dist",
       "!drizzle/meta",
       "!.output",
