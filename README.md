@@ -153,3 +153,19 @@ Wrangler writes provisioned resource IDs back into `wrangler.jsonc` after your
 own first deploy. Do not commit those IDs: they are specific to your account,
 and the bindings must stay ID-free for the deploy button to provision fresh
 resources for everyone else.
+
+### Change the rate limiter namespace IDs for a second store
+
+`wrangler.jsonc` declares six rate limiters with the namespace IDs `1001`
+through `1006`. A namespace ID is scoped to your whole Cloudflare account, not
+to one Worker, and
+[bindings that share one share their counters](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/).
+
+So give each store its own numbers if either of these is true:
+
+- You deploy this template more than once on the same account. A staging store
+  and a production store on `1001` do not get a limit each. They get one limit
+  between them, and traffic to either one uses it up.
+- Another Worker on your account already uses a number in that range.
+
+One store on a fresh account needs no change.

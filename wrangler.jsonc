@@ -24,7 +24,10 @@
     }
   ],
   // The period must be either 10 or 60 seconds. Each distinct limit needs its
-  // own binding, and each namespace_id must be unique within the account.
+  // own binding, and each namespace_id must be unique within the account:
+  // bindings that share one share their counters, across Workers. Deploying a
+  // second store? Renumber these first. See "Notes for maintainers" in
+  // README.md.
   "ratelimits": [
     {
       "name": "ORDER_LOOKUP_LIMITER",
