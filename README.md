@@ -1,5 +1,7 @@
 # then. ecommerce boilerplate
 
+**English** · [Bahasa Indonesia](README.id.md)
+
 A single-merchant ecommerce starter that runs entirely on Cloudflare, built with
 TanStack Start, Better Auth, Drizzle ORM, D1, R2, and Mayar V2 payments.
 
@@ -154,6 +156,11 @@ domain vocabulary in [`CONTEXT.md`](CONTEXT.md). Start with ADR-0011 for the
 database choice and ADR-0012 for how checkout stays atomic without transactions.
 
 ## Notes for maintainers
+
+[`README.id.md`](README.id.md) is a full translation of this file. It is a
+second copy of the same facts, so it drifts unless you edit both. The ADRs and
+`CONTEXT.md` are English only, on purpose: they change more often and are read
+by whoever is changing the code.
 
 Wrangler writes provisioned resource IDs back into `wrangler.jsonc` after your
 own first deploy. Do not commit those IDs: they are specific to your account,
