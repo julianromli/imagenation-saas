@@ -26,3 +26,50 @@ export class RateLimitError extends Error {
     this.name = "RateLimitError";
   }
 }
+
+/** Not enough credits. The same request succeeds after a top-up. */
+export class InsufficientCreditsError extends Error {
+  readonly status = 402;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "InsufficientCreditsError";
+  }
+}
+
+/** The account already has work in flight, or is locked out. */
+export class ConflictError extends Error {
+  readonly status = 409;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "ConflictError";
+  }
+}
+
+/** The account is allowed in but not allowed to do this. */
+export class ForbiddenError extends Error {
+  readonly status = 403;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "ForbiddenError";
+  }
+}
+
+export type HttpError =
+  | ConflictError
+  | ForbiddenError
+  | InsufficientCreditsError
+  | InvalidRequestError
+  | RateLimitError;
+
+export function isHttpError(error: unknown): error is HttpError {
+  return (
+    error instanceof ConflictError ||
+    error instanceof ForbiddenError ||
+    error instanceof InsufficientCreditsError ||
+    error instanceof InvalidRequestError ||
+    error instanceof RateLimitError
+  );
+}

@@ -1,14 +1,8 @@
 import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
 
-import { type BatchStatement, getDb, runBatch } from "@/db";
-import {
-  inventoryReservations,
-  orderStatusHistory,
-  orders,
-  paymentAttempts,
-  products,
-  webhookEvents,
-} from "@/db/schema";
+import { getDb, runBatch } from "@/db";
+import { creditPurchases, users, webhookEvents } from "@/db/schema";
+import { ensureAccountStatement, ledgerStatements } from "@/lib/credits";
 import { createId } from "@/lib/ids";
 import {
   getMayarTransaction,
@@ -33,6 +27,13 @@ function objectValue(value: unknown) {
     : {};
 }
 
+/**
+ * Finds the transaction a webhook is really about.
+ *
+ * Mayar sends no signature, so the payload is treated as a hint and nothing
+ * more: the candidates come from our own pending purchases, and each one is
+ * confirmed by reading the transaction back from Mayar. See ADR-0007.
+ */
 async function findVerifiedTransactionForWebhook(webhook: MayarWebhook) {
   const data = objectValue(webhook.payload.data);
   const customerEmail =
@@ -47,17 +48,17 @@ async function findVerifiedTransactionForWebhook(webhook: MayarWebhook) {
 
   const candidates = await getDb()
     .select({
-      id: orders.id,
-      mayarTransactionId: orders.mayarTransactionId,
-      total: orders.total,
+      amount: creditPurchases.amount,
+      id: creditPurchases.id,
+      mayarTransactionId: creditPurchases.mayarTransactionId,
     })
-    .from(orders)
+    .from(creditPurchases)
+    .innerJoin(users, eq(users.id, creditPurchases.userId))
     .where(
       and(
-        eq(orders.paymentStatus, "pending"),
-        eq(orders.status, "pending_payment"),
-        eq(orders.total, amount),
-        sql`lower(${orders.guestEmail}) = ${customerEmail}`
+        eq(creditPurchases.status, "pending"),
+        eq(creditPurchases.amount, amount),
+        sql`lower(${users.email}) = ${customerEmail}`
       )
     )
     .limit(20);
@@ -72,9 +73,9 @@ async function findVerifiedTransactionForWebhook(webhook: MayarWebhook) {
     const extraData = objectValue(transaction.extraData);
 
     if (
-      transaction.amount === candidate.total &&
+      transaction.amount === candidate.amount &&
       isMayarPaid(transaction.status) &&
-      extraData.orderId === candidate.id
+      extraData.purchaseId === candidate.id
     ) {
       return transaction;
     }
@@ -250,7 +251,7 @@ export async function processMayarWebhook(
   if (!verifiedTransactionId) {
     await markWebhookIgnored(
       eventRecord.id,
-      "Transaction ID mapping could not be verified from the pending order data"
+      "Transaction ID mapping could not be verified from the pending purchase data"
     );
 
     return {
@@ -293,38 +294,39 @@ export async function processMayarWebhook(
 }
 
 /**
- * Turns a verified paid transaction into a paid order.
+ * Turns a verified paid transaction into credits.
  *
  * The reads happen first, then every write goes into one batch. The webhook
- * lease already keeps a second worker out, and the `reserved_stock` check
- * constraint stops a double conversion from corrupting stock if one gets in.
+ * lease already keeps a second worker out, and the unique index on
+ * (ref_type, ref_id, reason) stops a replay from granting twice even if one
+ * gets in. See ADR-0016.
  */
-async function settleVerifiedPayment(
+export async function settleVerifiedPayment(
   eventRecordId: string,
   verifiedTransactionId: string
 ) {
   const db = getDb();
   const transactionDetail = await getMayarTransaction(verifiedTransactionId);
   const extraData = objectValue(transactionDetail.extraData);
-  const orderId =
-    typeof extraData.orderId === "string" ? extraData.orderId : undefined;
+  const purchaseId =
+    typeof extraData.purchaseId === "string" ? extraData.purchaseId : undefined;
   const now = new Date();
-  const [order] = await db
+  const [purchase] = await db
     .select()
-    .from(orders)
+    .from(creditPurchases)
     .where(
-      orderId
-        ? eq(orders.id, orderId)
-        : eq(orders.mayarTransactionId, transactionDetail.id)
+      purchaseId
+        ? eq(creditPurchases.id, purchaseId)
+        : eq(creditPurchases.mayarTransactionId, transactionDetail.id)
     )
     .limit(1);
 
-  if (!order) {
-    throw new Error("Mayar transaction is not linked to a local order");
+  if (!purchase) {
+    throw new Error("Mayar transaction is not linked to a credit purchase");
   }
 
-  if (transactionDetail.amount !== order.total) {
-    throw new Error("Mayar amount does not match the local order total");
+  if (transactionDetail.amount !== purchase.amount) {
+    throw new Error("Mayar amount does not match the credit pack price");
   }
 
   if (!isMayarPaid(transactionDetail.status)) {
@@ -338,118 +340,50 @@ async function settleVerifiedPayment(
       })
       .where(eq(webhookEvents.id, eventRecordId));
 
-    return { orderNumber: order.orderNumber, processed: false };
+    return { processed: false, reference: purchase.reference };
   }
 
-  if (order.paymentStatus === "paid") {
-    await db
-      .update(webhookEvents)
-      .set({
-        completedAt: now,
-        lockedUntil: null,
-        processedAt: now,
-        status: "completed",
-        updatedAt: now,
-      })
-      .where(eq(webhookEvents.id, eventRecordId));
+  const completeEvent = db
+    .update(webhookEvents)
+    .set({
+      completedAt: now,
+      lockedUntil: null,
+      processedAt: now,
+      status: "completed",
+      transactionId: transactionDetail.id,
+      updatedAt: now,
+    })
+    .where(eq(webhookEvents.id, eventRecordId));
 
-    return { orderNumber: order.orderNumber, processed: true };
+  if (purchase.creditedAt) {
+    await runBatch([completeEvent]);
+
+    return { processed: true, reference: purchase.reference };
   }
 
-  const reservations = await db
-    .select()
-    .from(inventoryReservations)
-    .where(
-      and(
-        eq(inventoryReservations.orderId, order.id),
-        eq(inventoryReservations.status, "reserved")
-      )
-    );
-
-  if (reservations.length === 0) {
-    throw new Error(
-      "Payment arrived after its inventory reservation expired; reconcile manually"
-    );
-  }
-
-  const statements: BatchStatement[] = [];
-
-  for (const reservation of reservations) {
-    // Guarded the same way as a release: a second concurrent settlement must
-    // not take reserved stock down twice.
-    const stillReserved = sql`EXISTS (SELECT 1 FROM ${inventoryReservations} WHERE ${inventoryReservations.id} = ${reservation.id} AND ${inventoryReservations.status} = 'reserved')`;
-
-    statements.push(
-      db
-        .update(products)
-        .set({
-          reservedStock: sql`${products.reservedStock} - ${reservation.quantity}`,
-          updatedAt: now,
-        })
-        .where(and(eq(products.id, reservation.productId), stillReserved)),
-      db
-        .update(inventoryReservations)
-        .set({
-          convertedAt: now,
-          status: "converted",
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(inventoryReservations.id, reservation.id),
-            eq(inventoryReservations.status, "reserved")
-          )
-        )
-    );
-  }
-
-  statements.push(
-    db
-      .update(orders)
-      .set({
-        mayarTransactionId: transactionDetail.id,
-        paidAt: now,
-        paymentStatus: "paid",
-        status: "paid",
-        updatedAt: now,
-      })
-      .where(eq(orders.id, order.id)),
-    db
-      .update(paymentAttempts)
-      .set({
-        status: "paid",
-        updatedAt: now,
-      })
-      // Only the attempt that was actually paid. An order can hold earlier
-      // attempts, and those did not become paid.
-      .where(
-        and(
-          eq(paymentAttempts.orderId, order.id),
-          eq(paymentAttempts.transactionId, transactionDetail.id)
-        )
-      ),
-    db.insert(orderStatusHistory).values({
-      actorUserId: null,
-      fromStatus: order.status,
-      id: createId(),
-      note: "Payment confirmed by Mayar transaction lookup",
-      orderId: order.id,
-      toStatus: "paid",
+  await runBatch([
+    ensureAccountStatement(purchase.userId),
+    ...ledgerStatements({
+      delta: purchase.credits,
+      idrValue: purchase.amount,
+      note: purchase.packId,
+      reason: "purchase",
+      refId: purchase.id,
+      refType: "purchase",
+      userId: purchase.userId,
     }),
     db
-      .update(webhookEvents)
+      .update(creditPurchases)
       .set({
-        completedAt: now,
-        lockedUntil: null,
-        processedAt: now,
-        status: "completed",
-        transactionId: transactionDetail.id,
+        creditedAt: now,
+        mayarTransactionId: transactionDetail.id,
+        paidAt: now,
+        status: "paid",
         updatedAt: now,
       })
-      .where(eq(webhookEvents.id, eventRecordId))
-  );
+      .where(eq(creditPurchases.id, purchase.id)),
+    completeEvent,
+  ]);
 
-  await runBatch(statements);
-
-  return { orderNumber: order.orderNumber, processed: true };
+  return { processed: true, reference: purchase.reference };
 }

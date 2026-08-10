@@ -27,7 +27,7 @@ export function getDb() {
  *
  * Guards therefore live in the schema rather than in a `WHERE` clause: a `WHERE`
  * that matches nothing succeeds quietly, while a violated constraint aborts the
- * batch. See ADR-0012.
+ * batch. See ADR-0016.
  */
 export function runBatch(statements: BatchStatement[]) {
   if (statements.length === 0) {

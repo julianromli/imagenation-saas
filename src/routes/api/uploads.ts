@@ -3,10 +3,11 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { getFreshSession } from "@/lib/auth";
 import { createId } from "@/lib/ids";
+import { consumeRateLimit } from "@/lib/rate-limit";
 import {
   ALLOWED_IMAGE_TYPES,
   MAX_IMAGE_BYTES,
-  PRODUCT_IMAGE_PREFIX,
+  REFERENCE_IMAGE_PREFIX,
 } from "@/lib/uploads";
 
 /** Reads a body, giving up as soon as it passes `maxBytes`. */
@@ -66,9 +67,13 @@ export const Route = createFileRoute("/api/uploads")({
       POST: async ({ request }) => {
         const session = await getFreshSession(request.headers);
 
-        if (session?.user.role !== "admin") {
-          return Response.json({ error: "Unauthorized" }, { status: 403 });
+        if (!session) {
+          return Response.json({ error: "Unauthorized" }, { status: 401 });
         }
+
+        // Uploading costs storage and nothing else, but it is still a write a
+        // signed-in stranger can repeat. The generate limiter covers it.
+        await consumeRateLimit("GENERATE_LIMITER", session.user.id);
 
         const contentType = request.headers.get("content-type") ?? "";
         const extension = ALLOWED_IMAGE_TYPES.get(contentType);
@@ -110,7 +115,9 @@ export const Route = createFileRoute("/api/uploads")({
           );
         }
 
-        const objectKey = `${PRODUCT_IMAGE_PREFIX}${createId()}.${extension}`;
+        // The owner is in the key, so the read path can decide access from the
+        // key alone without a database lookup.
+        const objectKey = `${REFERENCE_IMAGE_PREFIX}${session.user.id}/${createId()}.${extension}`;
 
         await env.BUCKET.put(objectKey, body, {
           httpMetadata: { contentType },

@@ -1,40 +1,54 @@
 # Domain context
 
-## customer
+One term for each idea. Never call a credit a "token": `input_references` and
+`usage.total_tokens` already mean something else in this codebase, and that
+collision is expensive to unpick later.
 
-A person who places or pays for an order.
+## credit
 
-## order
+The unit a person spends to make an image. Credits have no expiry and no cash
+value on their own. What one image costs in credits depends on its resolution,
+and nothing else.
 
-A customer purchase that contains items, delivery details, a total, and a
-fulfillment lifecycle.
+## credit ledger
 
-## payment status
+The append-only record of every credit that ever moved, and why. A row is never
+updated or deleted, so a balance can always be rebuilt by summing it. The
+balance held against an account is a cache of that sum, written in the same
+atomic batch, never a second truth.
 
-The recorded state of whether an order's payment has been received.
+## grant
 
-## order status
+Credits given rather than bought. A new account receives one on sign-up, and an
+operator can write one by hand for support. A grant is a normal ledger entry
+carrying its reason, so the decision behind it stays readable.
 
-The fulfillment state of an order after checkout.
+## generation
+
+One attempt to turn a prompt into an image. It exists as a record before the
+model is called, so a closed tab, a failure, or a refund all have something to
+point at. It ends as succeeded or failed, and a failure either returns its
+credits or, when the prompt was blocked, deliberately does not.
+
+## credit pack
+
+A quantity of credits sold for a fixed price. Packs are defined in code, not in
+the database, and nothing about them is provisioned on the payment provider.
+
+## share link
+
+The one address at which an image belonging to one account can be read by
+anybody. It exists only while its owner keeps it on. An image with a live share
+link is never deleted by the retention sweep.
 
 ## payment confirmation
 
-Trusted evidence that the payment provider received the exact amount for the
-order and linked the payment to that order.
+Trusted evidence that the payment provider received the exact amount for a
+purchase and linked the payment to it. The webhook payload is a hint; the
+confirmation is the transaction we read back ourselves.
 
 ## payment reconciliation
 
-The process of comparing an order's payment status with payment confirmation
-and correcting the recorded status when the evidence matches.
-
-## checkout request
-
-A single attempt to turn a cart into an order, named by a key the buyer's
-browser chooses. The same key always names the same attempt, so a repeat of that
-attempt is recognised as the same one and never becomes a second order.
-
-## product image
-
-A picture that represents a product. It is held as an object with a stable key,
-not as an address. The public address is derived from the key at render time, so
-the key stays correct when the address changes.
+Comparing a purchase against payment confirmation and settling it when the
+evidence matches. It runs on a schedule as well as on the webhook, and both
+paths share one settlement, so running both can never grant credits twice.

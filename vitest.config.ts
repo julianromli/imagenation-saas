@@ -45,6 +45,9 @@ export default defineConfig({
               compatibilityDate: "2026-08-05",
               compatibilityFlags: ["nodejs_compat"],
               d1Databases: ["DB"],
+              // The generation path writes the finished image here. Without
+              // it, only the failure paths could be tested.
+              r2Buckets: ["BUCKET"],
             },
           })),
         ],

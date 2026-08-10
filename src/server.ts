@@ -2,7 +2,9 @@ import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 
 import {
   pruneSettledWebhookEvents,
-  reconcileExpiredOrders,
+  reconcilePendingPurchases,
+  refundStuckGenerations,
+  sweepExpiredImages,
 } from "@/lib/scheduled";
 
 // `createServerEntry` returns a fresh object holding only `fetch`, so anything
@@ -14,36 +16,38 @@ const startEntry = createServerEntry({
   },
 });
 
+/** Each job is waited on separately, so one failure cannot stop the others. */
+function run(name: string, job: Promise<unknown>) {
+  return job
+    .then((result) => {
+      console.log(`${name}:`, JSON.stringify(result));
+    })
+    .catch((error) => {
+      console.error(`${name} failed`, error);
+    });
+}
+
 const server: ExportedHandler<Cloudflare.Env> = {
   fetch: (request) => startEntry.fetch(request),
 
-  // Runs on the cron trigger declared in wrangler.jsonc. Public reads no longer
-  // clean up expired reservations, so this is the only thing that does.
-  // See ADR-0010.
+  // Runs on the cron trigger declared in wrangler.jsonc.
   scheduled: (_controller, _env, context) => {
+    // Credits taken for an image that never arrived come back here, and
+    // nowhere else. This is the job that matters most. See ADR-0017.
     context.waitUntil(
-      reconcileExpiredOrders()
-        .then((result) => {
-          console.log(
-            `Reservation sweep: examined ${result.examined}, settled ${result.settled}, cancelled ${result.cancelled}, skipped ${result.skipped}, ${result.remaining} left for the next run`
-          );
-        })
-        .catch((error) => {
-          console.error("Reservation sweep failed", error);
-        })
+      run("Stuck generation refunds", refundStuckGenerations())
     );
 
-    // Independent of the sweep, so a provider outage does not stop retention.
+    // The webhook is optional, so this is what credits an account on a deploy
+    // that never registered one. See ADR-0007.
     context.waitUntil(
-      pruneSettledWebhookEvents()
-        .then((removed) => {
-          if (removed > 0) {
-            console.log(`Pruned ${removed} settled webhook events`);
-          }
-        })
-        .catch((error) => {
-          console.error("Webhook retention sweep failed", error);
-        })
+      run("Purchase reconciliation", reconcilePendingPurchases())
+    );
+
+    // Independent of payments, so a provider outage does not stop retention.
+    context.waitUntil(run("Image retention sweep", sweepExpiredImages()));
+    context.waitUntil(
+      run("Webhook retention sweep", pruneSettledWebhookEvents())
     );
   },
 };

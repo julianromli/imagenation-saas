@@ -7,8 +7,8 @@ export type RuntimeEnv = {
   MAYAR_API_KEY?: string;
   MAYAR_ENV?: MayarEnvironment;
   MAYAR_ENVIRONMENT?: MayarEnvironment;
+  OPENROUTER_API_KEY?: string;
   SETUP_TOKEN?: string;
-  SHIPPING_FLAT_RATE?: string;
 };
 
 // Node tooling reads process.env. The Worker reads its own bindings. Values
@@ -30,8 +30,8 @@ export function getRuntimeEnv(): RuntimeEnv {
     BETTER_AUTH_SECRET: value("BETTER_AUTH_SECRET"),
     MAYAR_API_KEY: value("MAYAR_API_KEY"),
     MAYAR_ENVIRONMENT: environment === "production" ? "production" : "sandbox",
+    OPENROUTER_API_KEY: value("OPENROUTER_API_KEY"),
     SETUP_TOKEN: value("SETUP_TOKEN"),
-    SHIPPING_FLAT_RATE: value("SHIPPING_FLAT_RATE"),
   };
 }
 
@@ -43,14 +43,6 @@ export function requireEnv<K extends keyof RuntimeEnv>(name: K): string {
   }
 
   return runtimeValue;
-}
-
-export function getShippingFlatRate() {
-  const shippingRate = Number(getRuntimeEnv().SHIPPING_FLAT_RATE ?? 0);
-
-  return Number.isSafeInteger(shippingRate) && shippingRate >= 0
-    ? shippingRate
-    : 0;
 }
 
 /**

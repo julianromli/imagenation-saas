@@ -16,7 +16,6 @@
       "!drizzle/meta",
       "!.output",
       "!src/components/ui",
-      "!src/logo.svg",
       "!src/routeTree.gen.ts",
       "!src/styles.css"
     ]

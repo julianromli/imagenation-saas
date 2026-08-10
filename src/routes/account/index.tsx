@@ -1,88 +1,96 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  getRouteApi,
+  Link,
+  useNavigate,
+  useRouter,
+} from "@tanstack/react-router";
 
-import { ClaimableGuestOrders } from "@/components/claimable-guest-orders";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { getSession } from "@/lib/auth.functions";
 import { authClient } from "@/lib/auth-client";
-import { getClaimableGuestOrders } from "@/lib/order.functions";
+
+const rootApi = getRouteApi("__root__");
 
 export const Route = createFileRoute("/account/")({
   component: AccountPage,
-  loader: async () => {
-    const session = await getSession();
-
-    return {
-      claimableOrders: session ? await getClaimableGuestOrders() : [],
-      session,
-    };
-  },
+  head: () => ({
+    meta: [{ title: "Account — Imagenation" }],
+  }),
+  loader: () => getSession(),
 });
 
 function AccountPage() {
-  const { claimableOrders, session } = Route.useLoaderData();
+  const session = Route.useLoaderData();
+  const { balance } = rootApi.useLoaderData();
   const navigate = useNavigate();
+  const router = useRouter();
 
   if (!session) {
     return (
       <main className="mx-auto max-w-xl px-5 pt-20 pb-32 text-center sm:px-8">
-        <p className="text-muted-foreground text-sm">Account</p>
-        <h1 className="mt-3 font-heading font-medium text-5xl tracking-[-0.06em]">
-          Keep your orders close.
+        <h1 className="font-heading font-medium text-4xl tracking-[-0.05em]">
+          Sign in to Imagenation.
         </h1>
-        <p className="mt-5 text-muted-foreground">
-          Sign in to see your order history, or check out as a guest.
+        <p className="mt-4 text-muted-foreground">
+          Your images, your credits, and your purchases live behind your
+          account.
         </p>
-        <div className="mt-8 flex justify-center gap-3">
-          <Link className={buttonVariants()} to="/sign-in">
-            Sign in
-          </Link>
-          <Link
-            className={buttonVariants({ variant: "outline" })}
-            to="/sign-up"
-          >
-            Create account
-          </Link>
-        </div>
+        <Link
+          className="mt-8 inline-flex min-h-11 items-center rounded-full bg-foreground px-5 text-background text-sm"
+          to="/auth"
+        >
+          Sign in
+        </Link>
       </main>
     );
   }
 
   return (
-    <main className="mx-auto max-w-3xl px-5 pt-14 pb-20 sm:px-8">
-      <p className="text-muted-foreground text-sm">Account</p>
-      <h1 className="mt-3 font-heading font-medium text-5xl tracking-[-0.06em]">
-        Welcome, {session.user.name}.
+    <main className="mx-auto max-w-3xl px-5 pt-12 pb-24 sm:px-8">
+      <h1 className="font-heading font-medium text-4xl tracking-[-0.05em]">
+        {session.user.name}
       </h1>
-
-      {claimableOrders.length > 0 ? (
-        <div className="mt-10">
-          <ClaimableGuestOrders orders={claimableOrders} />
-        </div>
-      ) : null}
+      <p className="mt-3 text-muted-foreground text-sm">{session.user.email}</p>
 
       <div className="mt-10 grid gap-4 sm:grid-cols-2">
-        <Link
-          className="rounded-3xl border p-6 transition-colors hover:bg-muted"
-          to="/account/orders"
-        >
-          <p className="font-medium">Order history</p>
-          <p className="mt-2 text-muted-foreground text-sm leading-6">
-            See your recent orders and their current progress.
+        <Link className="rounded-3xl border p-6 hover:bg-muted" to="/credits">
+          <p className="text-muted-foreground text-sm">Balance</p>
+          <p className="mt-2 font-heading font-medium text-4xl tracking-[-0.05em] tabular-nums">
+            {balance}
+          </p>
+          <p className="mt-2 text-muted-foreground text-sm">
+            Buy more or read your credit history.
           </p>
         </Link>
-        <div className="rounded-3xl border p-6">
-          <p className="font-medium">Account details</p>
+        <Link className="rounded-3xl border p-6 hover:bg-muted" to="/history">
+          <p className="font-medium">Your images</p>
           <p className="mt-2 text-muted-foreground text-sm leading-6">
-            {session.user.email}
+            Everything you have made, with its share link.
           </p>
-        </div>
+        </Link>
       </div>
+
+      {session.user.role === "admin" ? (
+        <Link
+          className="mt-4 block rounded-3xl border p-6 hover:bg-muted"
+          to="/admin"
+        >
+          <p className="font-medium">Admin</p>
+          <p className="mt-2 text-muted-foreground text-sm leading-6">
+            Balances, purchases, and failed generations.
+          </p>
+        </Link>
+      ) : null}
+
       <Button
-        className="mt-8"
+        className="mt-10 rounded-full"
         onClick={async () => {
           await authClient.signOut();
+          await router.invalidate();
           await navigate({ to: "/" });
         }}
+        type="button"
         variant="outline"
       >
         Sign out

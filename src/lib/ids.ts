@@ -2,11 +2,15 @@ export function createId() {
   return crypto.randomUUID();
 }
 
-export function createOrderNumber() {
+/**
+ * The reference a buyer sees and quotes at support. It is not the primary key:
+ * the key is a UUID, and this is the readable name for it.
+ */
+export function createPurchaseReference() {
   const stamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
   const suffix = crypto.randomUUID().slice(0, 6).toUpperCase();
 
-  return `THN-${stamp}-${suffix}`;
+  return `IMG-${stamp}-${suffix}`;
 }
 
 export function createAccessToken() {

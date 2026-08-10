@@ -2,13 +2,13 @@
 User-agent: *
 Allow: /
 
-# Nothing here belongs in a search result. Order status pages carry a secret
-# token in the path, so they are unlisted rather than private, and a crawler
-# that finds one must not publish it.
+# Shared images at /s/ are meant to be found. Everything below belongs to one
+# account, or is machinery.
 Disallow: /account
 Disallow: /admin
 Disallow: /api/
-Disallow: /cart
-Disallow: /checkout
-Disallow: /orders
+Disallow: /auth
+Disallow: /credits
+Disallow: /history
+Disallow: /images/
 Disallow: /setup

@@ -3,6 +3,7 @@ import {
   check,
   index,
   integer,
+  real,
   sqliteTable,
   text,
   unique,
@@ -29,37 +30,38 @@ const timestamps = {
 
 // SQLite has no enum type. These lists give Drizzle a typed union on the column.
 // They are not checked at runtime, so every write must go through typed code.
-export const PRODUCT_STATUS = ["active", "archived"] as const;
-export const ORDER_STATUS = [
-  "pending_payment",
-  "paid",
-  "processing",
-  "shipped",
-  "delivered",
-  "cancelled",
-  "refunded",
+
+/** Why a credit entry exists. One term per idea; see CONTEXT.md. */
+export const CREDIT_REASON = [
+  "grant",
+  "purchase",
+  "spend",
+  "refund",
+  "adjustment",
 ] as const;
-export const PAYMENT_STATUS = [
+
+export const GENERATION_STATUS = ["pending", "succeeded", "failed"] as const;
+
+/**
+ * Why a generation failed. `moderation` is deliberately separate from the
+ * rest: it is the only failure that keeps the credits, so refund logic reads
+ * this column rather than re-deriving intent from an error message.
+ */
+export const GENERATION_ERROR = [
+  "moderation",
+  "rate_limited",
+  "upstream",
+  "timeout",
+  "invalid",
+] as const;
+
+export const PURCHASE_STATUS = [
   "pending",
   "paid",
   "expired",
   "failed",
-  "refunded",
 ] as const;
-export const RESERVATION_STATUS = [
-  "reserved",
-  "converted",
-  "released",
-  "expired",
-] as const;
-export const PAYMENT_ATTEMPT_STATUS = [
-  "created",
-  "pending",
-  "paid",
-  "expired",
-  "failed",
-  "refunded",
-] as const;
+
 export const WEBHOOK_EVENT_STATUS = [
   "completed",
   "received",
@@ -68,7 +70,6 @@ export const WEBHOOK_EVENT_STATUS = [
   "ignored",
   "failed",
 ] as const;
-export const REFUND_STATUS = ["pending", "completed", "failed"] as const;
 
 export const users = sqliteTable(
   "user",
@@ -79,6 +80,10 @@ export const users = sqliteTable(
       .notNull(),
     id: text("id").primaryKey(),
     image: text("image"),
+    // Mayar requires a mobile number on every invoice, so a buyer is asked for
+    // one at their first purchase and it is remembered. Nobody who only
+    // generates images is ever asked.
+    mobile: text("mobile"),
     name: text("name").notNull(),
     role: text("role").default("customer").notNull(),
     ...timestamps,
@@ -142,245 +147,179 @@ export const verifications = sqliteTable(
   (table) => [index("verification_identifier_idx").on(table.identifier)]
 );
 
-export const categories = sqliteTable(
-  "category",
+/**
+ * The spendable balance, one row per user.
+ *
+ * This is a cache of the sum of `credit_entry`, not a second truth. Every
+ * write updates both in one D1 batch. The CHECK is the overspend guard: a
+ * spend that would take the balance below zero aborts the batch, exactly as
+ * the parent template guarded stock. See ADR-0016.
+ */
+export const creditAccounts = sqliteTable(
+  "credit_account",
   {
-    description: text("description"),
-    id: text("id").primaryKey(),
-    name: text("name").notNull(),
-    slug: text("slug").notNull(),
-    ...timestamps,
-  },
-  (table) => [uniqueIndex("category_slug_unique").on(table.slug)]
-);
-
-export const products = sqliteTable(
-  "product",
-  {
-    availableStock: integer("available_stock").default(0).notNull(),
-    categoryId: text("category_id").references(() => categories.id, {
-      onDelete: "set null",
-    }),
-    currency: text("currency").default("IDR").notNull(),
-    description: text("description").notNull(),
-    id: text("id").primaryKey(),
-    name: text("name").notNull(),
-    price: integer("price").notNull(),
-    reservedStock: integer("reserved_stock").default(0).notNull(),
-    slug: text("slug").notNull(),
-    status: text("status", { enum: PRODUCT_STATUS })
-      .default("active")
-      .notNull(),
+    balance: integer("balance").default(0).notNull(),
+    userId: text("user_id")
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
     ...timestamps,
   },
   (table) => [
-    uniqueIndex("product_slug_unique").on(table.slug),
-    index("product_category_id_idx").on(table.categoryId),
-    index("product_status_idx").on(table.status),
-    // This constraint is the oversell guard. A checkout that would take stock
-    // below zero fails here, and D1 rolls back the whole batch. See ADR-0012.
-    check(
-      "product_available_stock_not_negative",
-      sql`${table.availableStock} >= 0`
-    ),
-    check(
-      "product_reserved_stock_not_negative",
-      sql`${table.reservedStock} >= 0`
+    check("credit_account_balance_not_negative", sql`${table.balance} >= 0`),
+  ]
+);
+
+/**
+ * Append-only. A row is never updated or deleted, so the balance can always be
+ * rebuilt by summing `delta`.
+ *
+ * `idrValue` is recorded on purchases and grants only. A spend is denominated
+ * in credits, and a later price change must not rewrite what an old spend
+ * cost. See CONTEXT.md.
+ */
+export const creditEntries = sqliteTable(
+  "credit_entry",
+  {
+    delta: integer("delta").notNull(),
+    id: text("id").primaryKey(),
+    idrValue: integer("idr_value"),
+    note: text("note"),
+    reason: text("reason", { enum: CREDIT_REASON }).notNull(),
+    refId: text("ref_id").notNull(),
+    refType: text("ref_type").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    ...timestamps,
+  },
+  (table) => [
+    index("credit_entry_user_created_idx").on(table.userId, table.createdAt),
+    // The double-credit guard. A repeated Mayar webhook and a repeated refund
+    // both violate this, which aborts the batch instead of paying twice.
+    unique("credit_entry_ref_unique").on(
+      table.refType,
+      table.refId,
+      table.reason
     ),
   ]
 );
 
-export const productImages = sqliteTable(
-  "product_image",
+/**
+ * One attempt to turn a prompt into an image. The row is written before the
+ * model is called, so a closed tab, a crash, or a refund all have something to
+ * point at. See ADR-0017.
+ */
+export const generations = sqliteTable(
+  "generation",
   {
-    alt: text("alt").notNull(),
+    aspectRatio: text("aspect_ratio").notNull(),
+    completedAt: integer("completed_at", { mode: "timestamp_ms" }),
+    creditCost: integer("credit_cost").notNull(),
+    errorCode: text("error_code", { enum: GENERATION_ERROR }),
+    errorMessage: text("error_message"),
     id: text("id").primaryKey(),
-    // R2 object key, not a public address. See ADR-0013.
-    objectKey: text("object_key").notNull(),
-    productId: text("product_id")
+    mediaType: text("media_type"),
+    model: text("model").notNull(),
+    // R2 object key, not an address. See ADR-0013.
+    objectKey: text("object_key"),
+    prompt: text("prompt").notNull(),
+    // R2 keys of the reference images this generation was given, in order.
+    referenceKeys: text("reference_keys", { mode: "json" })
+      .$type<string[]>()
+      .default([])
+      .notNull(),
+    refundedAt: integer("refunded_at", { mode: "timestamp_ms" }),
+    resolution: text("resolution").notNull(),
+    sharePromptVisible: integer("share_prompt_visible", { mode: "boolean" })
+      .default(true)
+      .notNull(),
+    // Null until the owner shares it. Presence is what makes the image public
+    // and what exempts it from the retention sweep.
+    shareToken: text("share_token"),
+    status: text("status", { enum: GENERATION_STATUS })
+      .default("pending")
+      .notNull(),
+    // What the call actually cost upstream, in USD. Never shown to a user, and
+    // impossible to recover later, so it is stored on every row.
+    upstreamCostUsd: real("upstream_cost_usd"),
+    userId: text("user_id")
       .notNull()
-      .references(() => products.id, { onDelete: "cascade" }),
-    sortOrder: integer("sort_order").default(0).notNull(),
+      .references(() => users.id, { onDelete: "cascade" }),
     ...timestamps,
   },
-  (table) => [index("product_image_product_id_idx").on(table.productId)]
+  (table) => [
+    index("generation_user_created_idx").on(table.userId, table.createdAt),
+    // The cron scans by status and age to refund whatever got stuck.
+    index("generation_status_created_idx").on(table.status, table.createdAt),
+    uniqueIndex("generation_share_token_unique").on(table.shareToken),
+    // One in-flight generation per user, decided by the database rather than
+    // by a read-then-write the next request can race.
+    uniqueIndex("generation_one_pending_per_user")
+      .on(table.userId)
+      .where(sql`status = 'pending'`),
+  ]
 );
 
-export const carts = sqliteTable(
-  "cart",
+/**
+ * The idempotency key the browser sends with a generate request. A repeat
+ * violates this primary key, which aborts the batch and prevents a second
+ * charge. See ADR-0002 and ADR-0003.
+ */
+export const generationRequests = sqliteTable(
+  "generation_request",
   {
+    fingerprint: text("fingerprint").notNull(),
+    generationId: text("generation_id")
+      .notNull()
+      .references(() => generations.id, { onDelete: "cascade" }),
     id: text("id").primaryKey(),
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     ...timestamps,
   },
-  (table) => [uniqueIndex("cart_user_id_unique").on(table.userId)]
-);
-
-export const cartItems = sqliteTable(
-  "cart_item",
-  {
-    cartId: text("cart_id")
-      .notNull()
-      .references(() => carts.id, { onDelete: "cascade" }),
-    id: text("id").primaryKey(),
-    productId: text("product_id")
-      .notNull()
-      .references(() => products.id, { onDelete: "restrict" }),
-    quantity: integer("quantity").notNull(),
-    ...timestamps,
-  },
   (table) => [
-    unique("cart_product_unique").on(table.cartId, table.productId),
-    index("cart_item_cart_id_idx").on(table.cartId),
+    index("generation_request_generation_id_idx").on(table.generationId),
   ]
 );
 
-export const orders = sqliteTable(
-  "order",
-  {
-    accessTokenExpiresAt: integer("access_token_expires_at", {
-      mode: "timestamp_ms",
-    }).notNull(),
-    accessTokenHash: text("access_token_hash").notNull(),
-    addressLine: text("address_line").notNull(),
-    city: text("city").notNull(),
-    currency: text("currency").default("IDR").notNull(),
-    guestEmail: text("guest_email").notNull(),
-    guestName: text("guest_name").notNull(),
-    guestPhone: text("guest_phone").notNull(),
-    id: text("id").primaryKey(),
-    mayarInvoiceId: text("mayar_invoice_id"),
-    mayarTransactionId: text("mayar_transaction_id"),
-    orderNumber: text("order_number").notNull(),
-    paidAt: integer("paid_at", { mode: "timestamp_ms" }),
-    paymentStatus: text("payment_status", { enum: PAYMENT_STATUS })
-      .default("pending")
-      .notNull(),
-    paymentUrl: text("payment_url"),
-    postalCode: text("postal_code").notNull(),
-    province: text("province").notNull(),
-    reservationExpiresAt: integer("reservation_expires_at", {
-      mode: "timestamp_ms",
-    }).notNull(),
-    shippingAmount: integer("shipping_amount").notNull(),
-    status: text("status", { enum: ORDER_STATUS })
-      .default("pending_payment")
-      .notNull(),
-    subtotal: integer("subtotal").notNull(),
-    total: integer("total").notNull(),
-    userId: text("user_id").references(() => users.id, {
-      onDelete: "set null",
-    }),
-    ...timestamps,
-  },
-  (table) => [
-    uniqueIndex("order_number_unique").on(table.orderNumber),
-    uniqueIndex("order_access_token_hash_unique").on(table.accessTokenHash),
-    index("order_user_id_idx").on(table.userId),
-    index("order_mayar_transaction_id_idx").on(table.mayarTransactionId),
-    // The scheduled job scans by status and expiry. See ADR-0010. Status-only
-    // lookups use this too, because status is its leading column.
-    index("order_reservation_expiry_idx").on(
-      table.status,
-      table.reservationExpiresAt
-    ),
-  ]
-);
-
-export const orderItems = sqliteTable(
-  "order_item",
-  {
-    id: text("id").primaryKey(),
-    // Frozen copy of the product image at purchase time, held as a key so that
-    // a later domain change does not rewrite order history. See ADR-0013.
-    imageObjectKey: text("image_object_key"),
-    lineTotal: integer("line_total").notNull(),
-    orderId: text("order_id")
-      .notNull()
-      .references(() => orders.id, { onDelete: "cascade" }),
-    productId: text("product_id").references(() => products.id, {
-      onDelete: "set null",
-    }),
-    productName: text("product_name").notNull(),
-    productSlug: text("product_slug").notNull(),
-    quantity: integer("quantity").notNull(),
-    unitPrice: integer("unit_price").notNull(),
-    ...timestamps,
-  },
-  (table) => [index("order_item_order_id_idx").on(table.orderId)]
-);
-
-export const checkoutRequests = sqliteTable(
-  "checkout_request",
-  {
-    fingerprint: text("fingerprint").notNull(),
-    // The idempotency key the browser sends. A repeat violates this primary key,
-    // which aborts the checkout batch and prevents a second order. See ADR-0003.
-    id: text("id").primaryKey(),
-    orderId: text("order_id")
-      .notNull()
-      .references(() => orders.id, { onDelete: "cascade" }),
-    ...timestamps,
-  },
-  (table) => [index("checkout_request_order_id_idx").on(table.orderId)]
-);
-
-export const inventoryReservations = sqliteTable(
-  "inventory_reservation",
-  {
-    convertedAt: integer("converted_at", { mode: "timestamp_ms" }),
-    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
-    id: text("id").primaryKey(),
-    orderId: text("order_id")
-      .notNull()
-      .references(() => orders.id, { onDelete: "cascade" }),
-    productId: text("product_id")
-      .notNull()
-      .references(() => products.id, { onDelete: "restrict" }),
-    quantity: integer("quantity").notNull(),
-    releasedAt: integer("released_at", { mode: "timestamp_ms" }),
-    status: text("status", { enum: RESERVATION_STATUS })
-      .default("reserved")
-      .notNull(),
-    ...timestamps,
-  },
-  (table) => [
-    unique("reservation_order_product_unique").on(
-      table.orderId,
-      table.productId
-    ),
-    index("reservation_expiry_idx").on(table.status, table.expiresAt),
-    index("reservation_order_id_idx").on(table.orderId),
-  ]
-);
-
-export const paymentAttempts = sqliteTable(
-  "payment_attempt",
+/** One attempt to buy a credit pack through a Mayar invoice. */
+export const creditPurchases = sqliteTable(
+  "credit_purchase",
   {
     amount: integer("amount").notNull(),
+    // Set when the credits reach the ledger, so a replayed webhook and the
+    // reconciliation job cannot both grant.
+    creditedAt: integer("credited_at", { mode: "timestamp_ms" }),
+    credits: integer("credits").notNull(),
     currency: text("currency").default("IDR").notNull(),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
     id: text("id").primaryKey(),
-    invoiceId: text("invoice_id"),
-    metadata: text("metadata", { mode: "json" }).$type<JsonObject>(),
-    orderId: text("order_id")
-      .notNull()
-      .references(() => orders.id, { onDelete: "cascade" }),
+    mayarInvoiceId: text("mayar_invoice_id"),
+    mayarTransactionId: text("mayar_transaction_id"),
+    packId: text("pack_id").notNull(),
+    paidAt: integer("paid_at", { mode: "timestamp_ms" }),
     paymentUrl: text("payment_url"),
-    provider: text("provider").default("mayar").notNull(),
-    status: text("status", { enum: PAYMENT_ATTEMPT_STATUS })
-      .default("created")
+    reference: text("reference").notNull(),
+    status: text("status", { enum: PURCHASE_STATUS })
+      .default("pending")
       .notNull(),
-    transactionId: text("transaction_id"),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     ...timestamps,
   },
   (table) => [
-    index("payment_attempt_order_id_idx").on(table.orderId),
-    uniqueIndex("payment_attempt_invoice_id_unique").on(table.invoiceId),
-    uniqueIndex("payment_attempt_transaction_id_unique").on(
-      table.transactionId
+    uniqueIndex("credit_purchase_reference_unique").on(table.reference),
+    uniqueIndex("credit_purchase_invoice_id_unique").on(table.mayarInvoiceId),
+    uniqueIndex("credit_purchase_transaction_id_unique").on(
+      table.mayarTransactionId
+    ),
+    index("credit_purchase_user_created_idx").on(table.userId, table.createdAt),
+    // The reconciliation job scans by status and age.
+    index("credit_purchase_status_created_idx").on(
+      table.status,
+      table.createdAt
     ),
   ]
 );
@@ -413,43 +352,6 @@ export const webhookEvents = sqliteTable(
   ]
 );
 
-export const orderStatusHistory = sqliteTable(
-  "order_status_history",
-  {
-    actorUserId: text("actor_user_id").references(() => users.id, {
-      onDelete: "set null",
-    }),
-    fromStatus: text("from_status"),
-    id: text("id").primaryKey(),
-    note: text("note"),
-    orderId: text("order_id")
-      .notNull()
-      .references(() => orders.id, { onDelete: "cascade" }),
-    toStatus: text("to_status").notNull(),
-    ...timestamps,
-  },
-  (table) => [index("order_status_history_order_id_idx").on(table.orderId)]
-);
-
-export const refunds = sqliteTable(
-  "refund",
-  {
-    amount: integer("amount").notNull(),
-    externalId: text("external_id"),
-    id: text("id").primaryKey(),
-    orderId: text("order_id")
-      .notNull()
-      .references(() => orders.id, { onDelete: "cascade" }),
-    provider: text("provider").default("mayar").notNull(),
-    reason: text("reason"),
-    status: text("status", { enum: REFUND_STATUS })
-      .default("pending")
-      .notNull(),
-    ...timestamps,
-  },
-  (table) => [index("refund_order_id_idx").on(table.orderId)]
-);
-
 export const setupMetadata = sqliteTable(
   "setup_metadata",
   {
@@ -472,18 +374,11 @@ export const authSchema = {
 
 export const schema = {
   ...authSchema,
-  cartItems,
-  carts,
-  categories,
-  checkoutRequests,
-  inventoryReservations,
-  orderItems,
-  orderStatusHistory,
-  orders,
-  paymentAttempts,
-  productImages,
-  products,
-  refunds,
+  creditAccounts,
+  creditEntries,
+  creditPurchases,
+  generationRequests,
+  generations,
   setupMetadata,
   webhookEvents,
 };

@@ -7,11 +7,11 @@ import {
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 
-import { CartProvider } from "@/components/cart-provider";
 import { SetupGuideButton } from "@/components/setup-guide-button";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
+import { getBalanceSummary } from "@/lib/credits.functions";
 import { getSetupStatus } from "@/lib/setup.functions";
 
 import appCss from "../styles.css?url";
@@ -50,31 +50,34 @@ export const Route = createRootRoute({
         name: "viewport",
       },
       {
-        title: "then. — considered goods for everyday life",
+        title: "Imagenation — describe it, and see it",
       },
       {
         content:
-          "Considered goods for everyday life. A single-merchant ecommerce starter.",
+          "Generate images from a written description. Pay with credits, no subscription.",
         name: "description",
       },
     ],
   }),
   /**
-   * Only the one boolean the guide needs. `getSetupStatus` also reports whether
-   * `SETUP_TOKEN` is configured, and that answer belongs to the setup page, not
-   * to the SSR payload of every page in the store.
+   * The balance is read here rather than per page, because the header shows it
+   * everywhere. This read is also what gives a new account its signup credits.
+   * See ADR-0016.
    */
   loader: async () => {
-    try {
-      const { complete } = await getSetupStatus();
+    const [setup, balance] = await Promise.all([
+      getSetupStatus().catch(() => ({ complete: true })),
+      getBalanceSummary().catch(() => ({
+        balance: 0,
+        signedIn: false as const,
+      })),
+    ]);
 
-      return { setupComplete: complete };
-    } catch {
-      // This loader now runs in front of every page. The guide is an
-      // onboarding nicety and the storefront is the business, so a status read
-      // that fails hides the button rather than taking the shop down with it.
-      return { setupComplete: true };
-    }
+    return {
+      balance: balance.balance,
+      setupComplete: setup.complete,
+      signedIn: balance.signedIn,
+    };
   },
   notFoundComponent: () => (
     <main className="mx-auto max-w-xl px-5 pt-20 pb-32 sm:px-8">
@@ -99,11 +102,15 @@ export const Route = createRootRoute({
 });
 
 function RootComponent() {
-  const { setupComplete } = Route.useLoaderData();
+  const { balance, setupComplete, signedIn } = Route.useLoaderData();
 
   return (
     <>
-      <Outlet />
+      <SiteHeader balance={balance} signedIn={signedIn} />
+      <div id="main-content">
+        <Outlet />
+      </div>
+      <SiteFooter />
       {setupComplete ? null : <SetupGuideButton />}
     </>
   );
@@ -122,11 +129,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         >
           Skip to content
         </a>
-        <CartProvider>
-          <SiteHeader />
-          <div id="main-content">{children}</div>
-          <SiteFooter />
-        </CartProvider>
+        {children}
         {import.meta.env.DEV ? (
           <TanStackDevtools
             config={{

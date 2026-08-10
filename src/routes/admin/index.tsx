@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Activity, PackageCheck, ShoppingCart } from "lucide-react";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { getAdminStats } from "@/lib/admin.functions";
+import { formatIdr } from "@/lib/format";
+import { PLANNING_USD_TO_IDR } from "@/lib/pricing";
 
 export const Route = createFileRoute("/admin/")({
   component: AdminOverview,
@@ -11,52 +12,75 @@ export const Route = createFileRoute("/admin/")({
 
 function AdminOverview() {
   const stats = Route.useLoaderData();
-  const statCards = [
+  const margin =
+    stats.revenueIdrLast30Days > 0
+      ? Math.round(
+          ((stats.revenueIdrLast30Days - stats.upstreamCostIdrLast30Days) /
+            stats.revenueIdrLast30Days) *
+            100
+        )
+      : null;
+
+  const cards = [
+    { label: "Accounts", value: String(stats.users) },
+    { label: "Credits outstanding", value: String(stats.creditsOutstanding) },
+    { label: "Images, 30 days", value: String(stats.madeLast30Days) },
+    { label: "Failures, 30 days", value: String(stats.failedLast30Days) },
     {
-      icon: PackageCheck,
-      label: "Active products",
-      value: stats.activeProducts,
+      label: "Revenue, 30 days",
+      value: formatIdr(stats.revenueIdrLast30Days),
     },
-    { icon: ShoppingCart, label: "Total orders", value: stats.totalOrders },
-    { icon: Activity, label: "Payment source", value: "Mayar" },
+    {
+      label: "Image cost, 30 days",
+      value: formatIdr(stats.upstreamCostIdrLast30Days),
+    },
   ];
 
   return (
     <section>
       <p className="text-muted-foreground text-sm">Overview</p>
       <h2 className="mt-2 font-heading font-medium text-4xl tracking-[-0.05em]">
-        A clear view of the shop.
+        Where the money is going.
       </h2>
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
-        {statCards.map(({ icon: Icon, label, value }) => (
+
+      {stats.stuckGenerations > 0 ? (
+        <p
+          className="mt-6 rounded-2xl border border-destructive/40 bg-destructive/5 px-5 py-4 text-sm"
+          role="alert"
+        >
+          {stats.stuckGenerations} generations have been pending for over half
+          an hour. The five-minute cron refunds these, so if this number is not
+          falling, the cron is not running.
+        </p>
+      ) : null}
+
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {cards.map((card) => (
           <Card
             className="rounded-3xl border bg-transparent p-5 shadow-none ring-0"
-            key={label}
+            key={card.label}
           >
-            <span className="inline-flex size-9 items-center justify-center rounded-xl bg-muted [&_svg]:size-4">
-              <Icon aria-hidden="true" />
-            </span>
-            <p className="mt-7 text-muted-foreground text-sm">{label}</p>
-            <p className="mt-1 font-medium text-3xl tracking-[-0.04em]">
-              {value}
+            <p className="text-muted-foreground text-sm">{card.label}</p>
+            <p className="mt-1 font-medium text-2xl tracking-[-0.04em] tabular-nums">
+              {card.value}
             </p>
           </Card>
         ))}
       </div>
-      <Card className="mt-8 rounded-3xl border bg-transparent shadow-none ring-0">
-        <CardHeader className="p-6 pb-0">
-          <CardTitle>Operational notes</CardTitle>
-        </CardHeader>
-        <CardContent className="p-6 pt-4">
-          <ul className="grid gap-3 text-muted-foreground text-sm leading-6">
-            <li>
-              Payment status is confirmed by Mayar webhooks and API resync.
-            </li>
-            <li>Inventory reservations expire after 30 minutes.</li>
-            <li>Refunds are marked here after completing them in Mayar.</li>
-          </ul>
-        </CardContent>
-      </Card>
+
+      <div className="mt-8 rounded-3xl border p-6 text-sm leading-6">
+        <p className="font-medium">Margin</p>
+        <p className="mt-2 text-muted-foreground">
+          {margin === null
+            ? "No paid purchases in the last 30 days, so there is nothing to compare against yet."
+            : `Roughly ${margin}% gross over the last 30 days, counting only what OpenRouter charged (${stats.upstreamCostUsdLast30Days.toFixed(2)} USD at ${PLANNING_USD_TO_IDR.toLocaleString("en-ID")} per USD).`}
+        </p>
+        <p className="mt-3 text-muted-foreground">
+          Revenue is counted when a purchase is paid, and image cost when an
+          image is made. Those do not line up inside one window: credits bought
+          this month may be spent next. Read the trend, not the day.
+        </p>
+      </div>
     </section>
   );
 }

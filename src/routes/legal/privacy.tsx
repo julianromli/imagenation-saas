@@ -9,18 +9,22 @@ export const Route = createFileRoute("/legal/privacy")({
 function PrivacyPage() {
   return (
     <LegalPage
-      intro="We collect the information needed to process orders, support delivery, and keep your account available."
+      intro="We collect the information needed to run your account, make the images you ask for, and take payment."
       sections={[
         {
-          body: "We may collect your name, contact details, shipping address, order contents, and payment references. Payment details are handled by the selected payment provider.",
+          body: "We store your name, email address, and the mobile number you give at your first purchase. We store every prompt you write, the images made from it, and the settings you chose. Payment details are handled by the payment provider and never reach us.",
           heading: "Information collected",
         },
         {
-          body: "Information is used to create and fulfill your order, provide order status, prevent misuse, and improve the storefront.",
-          heading: "How information is used",
+          body: "Your prompt and any reference images you upload are sent to the image provider to make the image. Nothing else is shared. Your images are private by default, and only become readable by others if you turn sharing on for a specific image.",
+          heading: "What is shared",
         },
         {
-          body: "Contact the merchant listed on the storefront for access, correction, or deletion requests. Keep this section aligned with your legal and retention requirements.",
+          body: "Generated images are deleted 90 days after they are made, unless you shared them. The record of what you made, and what it cost you, is kept so your credit history stays complete.",
+          heading: "How long it is kept",
+        },
+        {
+          body: "Contact the operator listed on this site for access, correction, or deletion requests. Keep this section aligned with your legal and retention requirements.",
           heading: "Your choices",
         },
       ]}

@@ -4,7 +4,7 @@ import {
   Outlet,
   redirect,
 } from "@tanstack/react-router";
-import { LayoutDashboard, Package, ShoppingCart, Tags } from "lucide-react";
+import { LayoutDashboard, Receipt, TriangleAlert, Users } from "lucide-react";
 
 import { ensureAdmin } from "@/lib/auth.functions";
 
@@ -12,9 +12,14 @@ const adminNavItems = [
   // Overview matches exactly. Without it, "/admin" counts as active on every
   // page below it and the whole nav reads as selected.
   { exact: true, icon: LayoutDashboard, label: "Overview", to: "/admin" },
-  { exact: false, icon: Package, label: "Products", to: "/admin/products" },
-  { exact: false, icon: Tags, label: "Categories", to: "/admin/categories" },
-  { exact: false, icon: ShoppingCart, label: "Orders", to: "/admin/orders" },
+  { exact: false, icon: Users, label: "Accounts", to: "/admin/accounts" },
+  { exact: false, icon: Receipt, label: "Purchases", to: "/admin/purchases" },
+  {
+    exact: false,
+    icon: TriangleAlert,
+    label: "Failures",
+    to: "/admin/failures",
+  },
 ] as const;
 
 export const Route = createFileRoute("/admin")({
@@ -23,7 +28,7 @@ export const Route = createFileRoute("/admin")({
       return { session: await ensureAdmin() };
     } catch {
       // biome-ignore lint/style/useErrorCause: TanStack redirect is the intended control flow.
-      throw redirect({ to: "/sign-in" });
+      throw redirect({ to: "/auth" });
     }
   },
   component: AdminLayout,

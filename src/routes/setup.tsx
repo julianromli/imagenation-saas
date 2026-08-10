@@ -53,14 +53,33 @@ function SetupPage() {
       <main className="mx-auto max-w-2xl px-5 pt-16 pb-32 sm:px-8">
         <p className="text-muted-foreground text-sm">Setup</p>
         <h1 className="mt-3 font-heading font-medium text-4xl tracking-[-0.05em]">
-          Your store is ready.
+          Imagenation is ready.
         </h1>
         <p className="mt-4 text-muted-foreground">
-          {result.seeded.products} sample products added, {result.seeded.images}{" "}
-          with images.
+          Your administrator account exists. Nothing was seeded: credit packs
+          live in <code>src/lib/pricing.ts</code> and images are made on demand.
         </p>
 
-        <section className="mt-10 rounded-3xl border p-6">
+        <section
+          className={
+            result.imageKey.ok
+              ? "mt-10 rounded-3xl border p-6"
+              : "mt-10 rounded-3xl border border-destructive/40 bg-destructive/5 p-6"
+          }
+        >
+          <h2 className="font-medium">
+            {result.imageKey.ok
+              ? "Your image key works"
+              : "Your image key does not work"}
+          </h2>
+          <p className="mt-2 text-muted-foreground text-sm leading-6">
+            {result.imageKey.ok
+              ? "OpenRouter answered and the image model is available to this key. Put a spend limit on it before you take money."
+              : `${result.imageKey.message}. Nobody can generate an image until this is fixed. Set OPENROUTER_API_KEY as a Worker secret and reload.`}
+          </p>
+        </section>
+
+        <section className="mt-6 rounded-3xl border p-6">
           <h2 className="font-medium">One step left</h2>
           <p className="mt-2 text-muted-foreground text-sm leading-6">
             Register this URL as your Mayar webhook. It contains a secret, so
@@ -71,8 +90,9 @@ function SetupPage() {
           </code>
           <p className="mt-4 text-muted-foreground text-sm leading-6">
             Registering it is optional. Payments are always proved by looking
-            the transaction up with Mayar, and a scheduled job reconciles orders
-            every five minutes. The webhook only makes confirmation faster.
+            the transaction up with Mayar, and a scheduled job reconciles
+            purchases every five minutes. The webhook only makes credits arrive
+            faster.
           </p>
         </section>
 
@@ -93,11 +113,11 @@ function SetupPage() {
           Setup already ran.
         </h1>
         <p className="mt-4 text-muted-foreground">
-          This store is configured. Sign in with your administrator account.
+          Imagenation is configured. Sign in with your administrator account.
         </p>
         <Link
           className="mt-8 inline-flex text-sm underline-offset-4 hover:underline"
-          to="/sign-in"
+          to="/auth"
         >
           Sign in
         </Link>
@@ -112,8 +132,9 @@ function SetupPage() {
         Create your administrator.
       </h1>
       <p className="mt-4 text-muted-foreground text-sm leading-6">
-        This runs once. It creates the first administrator, adds sample
-        products, and generates your Mayar webhook secret.
+        This runs once. It creates the first administrator, checks that your
+        OpenRouter key can reach the image model, and generates your Mayar
+        webhook secret.
       </p>
 
       {status.tokenConfigured ? null : (

@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "then-ecommerce-cf",
+  "name": "imagenation-saas",
   "main": "src/server.ts",
   "compatibility_date": "2026-08-05",
   "compatibility_flags": ["nodejs_compat"],
@@ -25,37 +25,33 @@
   ],
   // The period must be either 10 or 60 seconds. Each distinct limit needs its
   // own binding, and each namespace_id must be unique within the account:
-  // bindings that share one share their counters, across Workers. Deploying a
-  // second store? Renumber these first. See "Notes for maintainers" in
-  // README.md.
+  // bindings that share one share their counters, across Workers. The 1000
+  // range belongs to the ecommerce template this was forked from — deploying
+  // both on one account with the same numbers would make them share counters.
+  // Deploying a second Imagenation? Renumber these first.
   "ratelimits": [
     {
-      "name": "ORDER_LOOKUP_LIMITER",
-      "namespace_id": "1001",
-      "simple": {
-        "limit": 8,
-        "period": 60
-      }
-    },
-    {
-      "name": "PAYMENT_REFRESH_LIMITER",
-      "namespace_id": "1002",
+      "name": "GENERATE_LIMITER",
+      "namespace_id": "2001",
       "simple": {
         "limit": 12,
         "period": 60
       }
     },
+    // Sign-up is what mints the free credit grant, so it is the cheapest thing
+    // an abuser can repeat. This is the only brake, because there is no email
+    // verification. See ADR-0016.
     {
-      "name": "ORDER_CLAIM_LIMITER",
-      "namespace_id": "1003",
+      "name": "AUTH_LIMITER",
+      "namespace_id": "2002",
       "simple": {
-        "limit": 20,
+        "limit": 10,
         "period": 60
       }
     },
     {
       "name": "CHECKOUT_LIMITER",
-      "namespace_id": "1005",
+      "namespace_id": "2003",
       "simple": {
         "limit": 10,
         "period": 60
@@ -63,17 +59,17 @@
     },
     {
       "name": "WEBHOOK_LIMITER",
-      "namespace_id": "1004",
+      "namespace_id": "2004",
       "simple": {
         "limit": 60,
         "period": 60
       }
     },
-    // Setup runs once for the whole store, so this is keyed on a constant
+    // Setup runs once for the whole app, so this is keyed on a constant
     // rather than on the caller. A wrong token should cost the guesser time.
     {
       "name": "SETUP_LIMITER",
-      "namespace_id": "1006",
+      "namespace_id": "2005",
       "simple": {
         "limit": 10,
         "period": 60
@@ -84,7 +80,6 @@
     "crons": ["*/5 * * * *"]
   },
   "vars": {
-    "MAYAR_ENVIRONMENT": "sandbox",
-    "SHIPPING_FLAT_RATE": "0"
+    "MAYAR_ENVIRONMENT": "sandbox"
   }
 }

@@ -1,475 +1,187 @@
-import { env } from "cloudflare:workers";
 import { createServerFn } from "@tanstack/react-start";
-import { and, asc, count, desc, eq, sql } from "drizzle-orm";
-import { z } from "zod";
+import { count, desc, eq, sql, sum } from "drizzle-orm";
 
 import { getDb } from "@/db";
 import {
-  categories,
-  orderItems,
-  orderStatusHistory,
-  orders,
-  paymentAttempts,
-  productImages,
-  products,
-  refunds,
-  webhookEvents,
+  creditAccounts,
+  creditPurchases,
+  generations,
+  users,
 } from "@/db/schema";
 import { ensureAdmin } from "@/lib/auth.functions";
-import { createId } from "@/lib/ids";
-import {
-  createMayarVerificationPayload,
-  getMayarTransaction,
-} from "@/lib/mayar";
-import { processMayarWebhook } from "@/lib/payment.functions";
-import { productInputSchema, statusUpdateSchema } from "@/lib/validation";
+import { adjustCredits } from "@/lib/credits";
+import { PLANNING_USD_TO_IDR } from "@/lib/pricing";
+import { reconcilePurchase } from "@/lib/purchase.functions";
+import { creditAdjustmentSchema } from "@/lib/validation";
 
-const transitions: Record<string, string[]> = {
-  cancelled: ["pending_payment", "paid", "processing"],
-  delivered: ["shipped"],
-  processing: ["paid"],
-  shipped: ["processing"],
-};
-const categorySlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-// Keys this application minted, and nothing else in the bucket.
-const productImageKeyPattern = /^products\/[a-z0-9-]+\.(avif|jpg|png|webp)$/;
-
-const categoryInputSchema = z.object({
-  description: z.string().trim().max(500).optional(),
-  name: z.string().trim().min(2).max(80),
-  slug: z.string().trim().min(2).max(80).regex(categorySlugPattern),
-});
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Turns the `category_slug_unique` violation into something an admin can act
- * on. The driver otherwise surfaces the raw SQLite constraint text.
+ * The numbers an operator needs to answer "is this working, and is it
+ * profitable". `upstreamCostUsd` is recorded on every generation for exactly
+ * this. See ADR-0018.
  */
-function asSlugError(error: unknown) {
-  const message = error instanceof Error ? error.message : "";
-
-  if (message.includes("category_slug_unique") || message.includes("UNIQUE")) {
-    return new Error("That slug is already used by another category.");
-  }
-
-  return error instanceof Error ? error : new Error("Unable to save category.");
-}
-
 export const getAdminStats = createServerFn({ method: "GET" }).handler(
   async () => {
     await ensureAdmin();
+
     const db = getDb();
-    const [[productCount], [orderCount]] = await Promise.all([
-      db
-        .select({ count: count(products.id) })
-        .from(products)
-        .where(eq(products.status, "active")),
-      db.select({ count: count(orders.id) }).from(orders),
-    ]);
+    const since = new Date(Date.now() - 30 * DAY_MS);
+
+    const [[people], [outstanding], [made], [failed], [revenue], [stuck]] =
+      await Promise.all([
+        db.select({ value: count() }).from(users),
+        db.select({ value: sum(creditAccounts.balance) }).from(creditAccounts),
+        db
+          .select({
+            cost: sum(generations.upstreamCostUsd),
+            value: count(),
+          })
+          .from(generations)
+          .where(
+            sql`${generations.status} = 'succeeded' AND ${generations.createdAt} > ${since.getTime()}`
+          ),
+        db
+          .select({ value: count() })
+          .from(generations)
+          .where(
+            sql`${generations.status} = 'failed' AND ${generations.createdAt} > ${since.getTime()}`
+          ),
+        db
+          .select({ value: sum(creditPurchases.amount) })
+          .from(creditPurchases)
+          .where(
+            sql`${creditPurchases.status} = 'paid' AND ${creditPurchases.createdAt} > ${since.getTime()}`
+          ),
+        // A non-zero count here means the cron is not running. The credits for
+        // these are still taken and have not come back yet. See ADR-0017.
+        db
+          .select({ value: count() })
+          .from(generations)
+          .where(
+            sql`${generations.status} = 'pending' AND ${generations.createdAt} < ${Date.now() - 30 * 60 * 1000}`
+          ),
+      ]);
+
+    const upstreamUsd = Number(made?.cost ?? 0);
 
     return {
-      activeProducts: productCount?.count ?? 0,
-      totalOrders: orderCount?.count ?? 0,
+      creditsOutstanding: Number(outstanding?.value ?? 0),
+      failedLast30Days: failed?.value ?? 0,
+      madeLast30Days: made?.value ?? 0,
+      revenueIdrLast30Days: Number(revenue?.value ?? 0),
+      stuckGenerations: stuck?.value ?? 0,
+      upstreamCostIdrLast30Days: Math.round(upstreamUsd * PLANNING_USD_TO_IDR),
+      upstreamCostUsdLast30Days: upstreamUsd,
+      users: people?.value ?? 0,
     };
   }
 );
 
-export const getAdminProducts = createServerFn({ method: "GET" }).handler(
+export const listAccounts = createServerFn({ method: "GET" }).handler(
   async () => {
     await ensureAdmin();
 
-    return getDb()
+    const rows = await getDb()
       .select({
-        imageObjectKey: productImages.objectKey,
-        product: products,
+        balance: creditAccounts.balance,
+        createdAt: users.createdAt,
+        email: users.email,
+        id: users.id,
+        name: users.name,
+        role: users.role,
       })
-      .from(products)
-      .leftJoin(
-        productImages,
-        and(
-          eq(productImages.productId, products.id),
-          eq(productImages.sortOrder, 0)
-        )
-      )
-      .orderBy(desc(products.createdAt));
+      .from(users)
+      .leftJoin(creditAccounts, eq(creditAccounts.userId, users.id))
+      .orderBy(desc(users.createdAt))
+      .limit(100);
+
+    return rows.map((row) => ({
+      ...row,
+      balance: row.balance ?? 0,
+      createdAt: row.createdAt.getTime(),
+    }));
   }
 );
-
-export const createProduct = createServerFn({ method: "POST" })
-  .validator((data: unknown) => productInputSchema.parse(data))
-  .handler(async ({ data }) => {
-    await ensureAdmin();
-    const db = getDb();
-    const [product] = await db
-      .insert(products)
-      .values({
-        availableStock: data.stock,
-        categoryId: data.categoryId ?? null,
-        description: data.description,
-        id: createId(),
-        name: data.name,
-        price: data.price,
-        slug: data.slug,
-      })
-      .returning();
-
-    return product;
-  });
-
-export const createCategory = createServerFn({ method: "POST" })
-  .validator((data: unknown) => categoryInputSchema.parse(data))
-  .handler(async ({ data }) => {
-    await ensureAdmin();
-
-    try {
-      const [category] = await getDb()
-        .insert(categories)
-        .values({
-          description: data.description,
-          id: createId(),
-          name: data.name,
-          slug: data.slug,
-        })
-        .returning();
-
-      return category;
-    } catch (error) {
-      throw asSlugError(error);
-    }
-  });
-
-export const updateCategory = createServerFn({ method: "POST" })
-  .validator((data: unknown) =>
-    categoryInputSchema.extend({ id: z.string().min(1) }).parse(data)
-  )
-  .handler(async ({ data }) => {
-    await ensureAdmin();
-
-    try {
-      const [category] = await getDb()
-        .update(categories)
-        .set({
-          description: data.description,
-          name: data.name,
-          slug: data.slug,
-          updatedAt: new Date(),
-        })
-        .where(eq(categories.id, data.id))
-        .returning();
-
-      return category;
-    } catch (error) {
-      throw asSlugError(error);
-    }
-  });
-
-export const deleteCategory = createServerFn({ method: "POST" })
-  .validator((data: { id: string }) => data)
-  .handler(async ({ data }) => {
-    await ensureAdmin();
-
-    // Products keep existing. The category_id foreign key is `set null`, so
-    // every product in this category becomes uncategorised. See schema.ts.
-    await getDb().delete(categories).where(eq(categories.id, data.id));
-  });
-
-export const updateProduct = createServerFn({ method: "POST" })
-  .validator((data: unknown) =>
-    productInputSchema.extend({ id: z.string().min(1) }).parse(data)
-  )
-  .handler(async ({ data }) => {
-    await ensureAdmin();
-    const db = getDb();
-    const [product] = await db
-      .update(products)
-      .set({
-        availableStock: data.stock,
-        categoryId: data.categoryId ?? null,
-        description: data.description,
-        name: data.name,
-        price: data.price,
-        slug: data.slug,
-        updatedAt: new Date(),
-      })
-      .where(eq(products.id, data.id))
-      .returning();
-
-    return product;
-  });
-
-export const archiveProduct = createServerFn({ method: "POST" })
-  .validator((data: { id: string }) => data)
-  .handler(async ({ data }) => {
-    await ensureAdmin();
-
-    await getDb()
-      .update(products)
-      .set({ status: "archived", updatedAt: new Date() })
-      .where(eq(products.id, data.id));
-  });
-
-export const setProductImage = createServerFn({ method: "POST" })
-  .validator((data: unknown) =>
-    z
-      .object({
-        alt: z.string().trim().min(1).max(160),
-        objectKey: z
-          .string()
-          .trim()
-          .max(512)
-          // A free-form string would let an admin point a product at any object.
-          .regex(productImageKeyPattern),
-        productId: z.string().min(1),
-      })
-      .parse(data)
-  )
-  .handler(async ({ data }) => {
-    await ensureAdmin();
-
-    const db = getDb();
-    const replaced = await db
-      .select({ objectKey: productImages.objectKey })
-      .from(productImages)
-      .where(eq(productImages.productId, data.productId));
-    const [, inserted] = await db.batch([
-      db
-        .delete(productImages)
-        .where(eq(productImages.productId, data.productId)),
-      db
-        .insert(productImages)
-        .values({
-          alt: data.alt,
-          id: createId(),
-          objectKey: data.objectKey,
-          productId: data.productId,
-        })
-        .returning(),
-    ]);
-
-    // Best effort. An orphaned object costs storage; a failed delete must not
-    // undo a product update that already succeeded. See ADR-0013.
-    await Promise.allSettled(
-      replaced
-        .filter((image) => image.objectKey !== data.objectKey)
-        .map((image) => env.BUCKET.delete(image.objectKey))
-    );
-
-    return inserted[0];
-  });
 
 /**
- * Categories for the admin screen, without the shared cache the public
- * catalogue carries. An admin who creates, edits, or deletes a category must
- * see the result on the next load, not up to a minute later.
+ * Moves credits by hand, for support.
+ *
+ * It writes a ledger entry with a reason rather than setting the balance, so
+ * every decision an operator made stays visible. See ADR-0016.
  */
-export const getAdminCategories = createServerFn({ method: "GET" }).handler(
+export const adjustAccountCredits = createServerFn({ method: "POST" })
+  .inputValidator(creditAdjustmentSchema)
+  .handler(async ({ data }) => {
+    await ensureAdmin();
+    await adjustCredits({
+      credits: data.credits,
+      note: data.note,
+      userId: data.userId,
+    });
+
+    return { ok: true };
+  });
+
+export const listAllPurchases = createServerFn({ method: "GET" }).handler(
   async () => {
     await ensureAdmin();
 
-    // Two counts, because they answer different questions. `activeProducts` is
-    // what a shopper can reach, so it says whether the category earns its
-    // place. `totalProducts` is what a delete would detach, archived included.
-    return getDb()
+    const rows = await getDb()
       .select({
-        activeProducts: sql<number>`sum(case when ${products.status} = 'active' then 1 else 0 end)`,
-        description: categories.description,
-        id: categories.id,
-        name: categories.name,
-        slug: categories.slug,
-        totalProducts: sql<number>`count(${products.id})`,
+        amount: creditPurchases.amount,
+        createdAt: creditPurchases.createdAt,
+        credits: creditPurchases.credits,
+        email: users.email,
+        id: creditPurchases.id,
+        invoiceId: creditPurchases.mayarInvoiceId,
+        reference: creditPurchases.reference,
+        status: creditPurchases.status,
+        transactionId: creditPurchases.mayarTransactionId,
       })
-      .from(categories)
-      .leftJoin(products, eq(products.categoryId, categories.id))
-      .groupBy(categories.id)
-      .orderBy(asc(categories.name));
-  }
-);
-
-export const getAdminOrders = createServerFn({ method: "GET" }).handler(
-  async () => {
-    await ensureAdmin();
-
-    return getDb().select().from(orders).orderBy(desc(orders.createdAt));
-  }
-);
-
-export const getAdminOrder = createServerFn({ method: "GET" })
-  .validator((data: { id: string }) => data)
-  .handler(async ({ data }) => {
-    await ensureAdmin();
-    const db = getDb();
-    const [order] = await db
-      .select()
-      .from(orders)
-      .where(eq(orders.id, data.id))
-      .limit(1);
-
-    if (!order) {
-      throw new Error("Order not found");
-    }
-
-    const [items, history, attempts] = await Promise.all([
-      db.select().from(orderItems).where(eq(orderItems.orderId, order.id)),
-      db
-        .select()
-        .from(orderStatusHistory)
-        .where(eq(orderStatusHistory.orderId, order.id))
-        .orderBy(desc(orderStatusHistory.createdAt)),
-      db
-        .select()
-        .from(paymentAttempts)
-        .where(eq(paymentAttempts.orderId, order.id))
-        .orderBy(desc(paymentAttempts.createdAt)),
-    ]);
-
-    return { attempts, history, items, order };
-  });
-
-export const updateOrderStatus = createServerFn({ method: "POST" })
-  .validator((data: unknown) => statusUpdateSchema.parse(data))
-  .handler(async ({ data }) => {
-    const session = await ensureAdmin();
-
-    if (data.status === "paid" || data.status === "refunded") {
-      throw new Error("Use the payment reconciliation action for this status");
-    }
-
-    const db = getDb();
-    const [order] = await db
-      .select()
-      .from(orders)
-      .where(eq(orders.id, data.orderId))
-      .limit(1);
-
-    if (!order) {
-      throw new Error("Order not found");
-    }
-
-    if (!transitions[data.status]?.includes(order.status)) {
-      throw new Error(`Cannot move ${order.status} to ${data.status}`);
-    }
-
-    // The transition was validated against the status read a moment ago, so the
-    // write repeats that status as its own precondition. Without it, two
-    // administrators acting at once could both pass a check the other invalidated.
-    const [updated] = await db.batch([
-      db
-        .update(orders)
-        .set({ status: data.status, updatedAt: new Date() })
-        .where(and(eq(orders.id, order.id), eq(orders.status, order.status)))
-        .returning({ id: orders.id }),
-      db.insert(orderStatusHistory).values({
-        actorUserId: session.user.id,
-        fromStatus: order.status,
-        id: createId(),
-        note: data.note,
-        orderId: order.id,
-        toStatus: data.status,
-      }),
-    ]);
-
-    if (updated.length === 0) {
-      throw new Error(
-        "This order changed while you were working on it. Reload and try again."
-      );
-    }
-
-    return { status: data.status };
-  });
-
-export const resyncOrderPayment = createServerFn({ method: "POST" })
-  .validator((data: { id: string }) => data)
-  .handler(async ({ data }) => {
-    await ensureAdmin();
-    const [order] = await getDb()
-      .select({
-        id: orders.id,
-        transactionId: orders.mayarTransactionId,
-      })
-      .from(orders)
-      .where(eq(orders.id, data.id))
-      .limit(1);
-
-    if (!order?.transactionId) {
-      throw new Error("Order has no Mayar transaction to resync");
-    }
-
-    const transaction = await getMayarTransaction(order.transactionId);
-
-    return processMayarWebhook(
-      createMayarVerificationPayload(
-        `admin-resync-${order.id}-${Date.now()}`,
-        transaction
-      ),
-      { verifiedTransactionId: transaction.id }
-    );
-  });
-
-export const markOrderRefunded = createServerFn({ method: "POST" })
-  .validator((data: { id: string; reason?: string }) => data)
-  .handler(async ({ data }) => {
-    const session = await ensureAdmin();
-
-    const db = getDb();
-    const [order] = await db
-      .select()
-      .from(orders)
-      .where(eq(orders.id, data.id))
-      .limit(1);
-
-    if (order?.paymentStatus !== "paid") {
-      throw new Error("Only paid orders can be marked refunded");
-    }
-
-    const now = new Date();
-
-    const [refunded] = await db.batch([
-      db
-        .update(orders)
-        .set({
-          paymentStatus: "refunded",
-          status: "refunded",
-          updatedAt: now,
-        })
-        .where(and(eq(orders.id, order.id), eq(orders.paymentStatus, "paid")))
-        .returning({ id: orders.id }),
-      db
-        .update(paymentAttempts)
-        .set({ status: "refunded", updatedAt: now })
-        .where(eq(paymentAttempts.orderId, order.id)),
-      db.insert(refunds).values({
-        amount: order.total,
-        id: createId(),
-        orderId: order.id,
-        reason: data.reason,
-        status: "completed",
-      }),
-      db.insert(orderStatusHistory).values({
-        actorUserId: session.user.id,
-        fromStatus: order.status,
-        id: createId(),
-        note: "Marked after manual refund in Mayar dashboard",
-        orderId: order.id,
-        toStatus: "refunded",
-      }),
-    ]);
-
-    if (refunded.length === 0) {
-      throw new Error(
-        "This order is no longer marked paid. Reload and try again."
-      );
-    }
-
-    return { status: "refunded" as const };
-  });
-
-export const getWebhookEvents = createServerFn({ method: "GET" }).handler(
-  async () => {
-    await ensureAdmin();
-
-    return getDb()
-      .select()
-      .from(webhookEvents)
-      .orderBy(desc(webhookEvents.createdAt))
+      .from(creditPurchases)
+      .innerJoin(users, eq(users.id, creditPurchases.userId))
+      .orderBy(desc(creditPurchases.createdAt))
       .limit(100);
+
+    return rows.map((row) => ({ ...row, createdAt: row.createdAt.getTime() }));
+  }
+);
+
+/** Re-reads one purchase from Mayar. The same settlement path as the webhook. */
+export const recheckPurchase = createServerFn({ method: "POST" })
+  .inputValidator((id: string) => id)
+  .handler(async ({ data: id }) => {
+    await ensureAdmin();
+
+    return reconcilePurchase(id);
+  });
+
+export const listFailedGenerations = createServerFn({ method: "GET" }).handler(
+  async () => {
+    await ensureAdmin();
+
+    const rows = await getDb()
+      .select({
+        createdAt: generations.createdAt,
+        creditCost: generations.creditCost,
+        email: users.email,
+        errorCode: generations.errorCode,
+        errorMessage: generations.errorMessage,
+        id: generations.id,
+        refundedAt: generations.refundedAt,
+        resolution: generations.resolution,
+      })
+      .from(generations)
+      .innerJoin(users, eq(users.id, generations.userId))
+      .where(eq(generations.status, "failed"))
+      .orderBy(desc(generations.createdAt))
+      .limit(100);
+
+    return rows.map((row) => ({
+      ...row,
+      createdAt: row.createdAt.getTime(),
+      refunded: row.refundedAt !== null,
+    }));
   }
 );

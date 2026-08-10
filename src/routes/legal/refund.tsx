@@ -9,19 +9,19 @@ export const Route = createFileRoute("/legal/refund")({
 function RefundPage() {
   return (
     <LegalPage
-      intro="Refunds are handled by the merchant after reviewing the order and the applicable policy."
+      intro="Credits are refunded automatically when a generation fails. Refunds of money are handled by the operator."
       sections={[
         {
-          body: "Replace this section with the eligible reasons, request window, item condition requirements, and contact process for a full refund.",
-          heading: "Eligibility",
+          body: "A generation that fails for any reason other than a blocked prompt returns its credits to your balance automatically, usually within seconds and at the latest within five minutes. A prompt blocked for content keeps its credits, because that check runs before the image is made.",
+          heading: "Failed generations",
         },
         {
-          body: "A refund is only shown as complete in this storefront after the merchant completes it in Mayar and marks the order as refunded.",
+          body: "Replace this section with the operator's policy on refunding a credit purchase: the window, the conditions, and how to ask. Credits that have already been spent on images cannot be returned.",
+          heading: "Credit purchases",
+        },
+        {
+          body: "A money refund is only complete once the operator completes it in Mayar. The credit balance is adjusted separately, from the admin area, and that adjustment is recorded with its reason.",
           heading: "Payment status",
-        },
-        {
-          body: "Explain how returned goods, shipping costs, damaged items, and refund timing are handled for this store.",
-          heading: "After approval",
         },
       ]}
       title="Refunds"

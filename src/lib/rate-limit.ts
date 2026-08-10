@@ -8,10 +8,9 @@ import { RateLimitError } from "@/lib/errors";
  * enough for these paths. See ADR-0015.
  */
 export type LimiterName =
+  | "AUTH_LIMITER"
   | "CHECKOUT_LIMITER"
-  | "ORDER_CLAIM_LIMITER"
-  | "ORDER_LOOKUP_LIMITER"
-  | "PAYMENT_REFRESH_LIMITER"
+  | "GENERATE_LIMITER"
   | "SETUP_LIMITER"
   | "WEBHOOK_LIMITER";
 

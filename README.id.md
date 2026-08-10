@@ -1,44 +1,49 @@
-# then. ecommerce boilerplate
+# Imagenation
 
 [English](README.md) · **Bahasa Indonesia**
 
-Starter ecommerce untuk satu penjual yang berjalan sepenuhnya di Cloudflare,
-dibangun dengan TanStack Start, Better Auth, Drizzle ORM, D1, R2, dan
-pembayaran Mayar V2.
+Generator gambar AI berbasis kredit yang berjalan sepenuhnya di Cloudflare,
+dibangun dengan TanStack Start, Better Auth, Drizzle ORM, D1, R2, OpenRouter,
+dan pembayaran Mayar V2.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/julianromli/then-ecommerce-cf)
+Pengguna mendaftar, mendapat kredit gratis, menuliskan deskripsi gambar, lalu
+menerima gambarnya. Kredit tambahan dibeli sebagai paket. Tidak ada halaman
+landing: `/` adalah aplikasinya.
 
-Semua yang dibutuhkan toko disiapkan otomatis. Siapkan tiga secret sebelum Anda
-klik: lihat [Variabel lingkungan](#variabel-lingkungan).
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/julianromli/imagenation-saas)
 
-## Stack
+Semua yang dibutuhkan aplikasi ini disiapkan otomatis. Siapkan empat secret
+sebelum menekan tombol: lihat [Variabel lingkungan](#variabel-lingkungan).
+
+## Teknologi
 
 - TanStack Start (React 19) di Cloudflare Workers
-- D1 sebagai database, lewat Drizzle ORM
-- R2 untuk gambar produk, diunggah dan disajikan oleh Worker
-- Better Auth, self-hosted, dengan login email dan password
-- Mayar V2 untuk pembayaran
+- D1 sebagai basis data, melalui Drizzle ORM
+- R2 untuk gambar hasil dan gambar referensi, disajikan oleh Worker
+- Better Auth, self-hosted, dengan masuk memakai email dan kata sandi
+- OpenRouter untuk pembuatan gambar, pada `google/gemini-3.1-flash-image`
+- Mayar V2 untuk menjual paket kredit
 - Binding rate limiting Cloudflare dan satu cron trigger
 
 ## Mulai cepat
 
-### Deploy lewat tombol
+### Deploy dari tombol
 
-1. Klik **Deploy to Cloudflare**. Cloudflare akan fork repositori ini lalu
-   membuat database D1, bucket R2, dan rate limiter dari `wrangler.jsonc`.
-2. Isi tiga secret yang diminta.
+1. Klik **Deploy to Cloudflare**. Cloudflare menyalin repositori ini dan membuat
+   basis data D1, bucket R2, serta rate limiter dari `wrangler.jsonc`.
+2. Isi empat secret yang diminta.
 3. Setelah deploy selesai, buka `https://<worker-anda>.workers.dev/setup` lalu
    masukkan setup token Anda. Halaman itu membuat akun administrator pertama,
-   menambahkan produk contoh, dan menampilkan URL webhook Mayar yang perlu
-   didaftarkan.
+   memeriksa bahwa kunci OpenRouter Anda dapat menjangkau model gambar, dan
+   menampilkan URL webhook Mayar untuk didaftarkan.
 
 ### Pengembangan lokal
 
-Membutuhkan Bun 1.3 atau yang lebih baru.
+Membutuhkan Bun 1.3 atau lebih baru.
 
 ```sh
-git clone https://github.com/julianromli/then-ecommerce-cf
-cd then-ecommerce-cf
+git clone https://github.com/julianromli/imagenation-saas
+cd imagenation-saas
 bun install
 bun run setup   # menulis .dev.vars, membuat secret, migrasi D1 lokal
 bun dev
@@ -50,139 +55,196 @@ Lalu buka `http://localhost:3000/setup` dan pakai token yang dicetak oleh
 ## Variabel lingkungan
 
 D1, R2, dan rate limiter tidak perlu dikonfigurasi. Semuanya dideklarasikan
-tanpa ID di `wrangler.jsonc`, jadi Wrangler membuatnya secara lokal saat
-`wrangler dev` dan menyediakannya di akun Anda saat deploy.
+tanpa ID di `wrangler.jsonc`, sehingga Wrangler membuatnya secara lokal saat
+`wrangler dev` dan menyiapkannya di akun Anda saat deploy.
 
-| Variabel | Wajib | Keterangan |
+| Variabel | Wajib | Fungsinya |
 | --- | --- | --- |
-| `BETTER_AUTH_SECRET` | Ya | Menandatangani cookie sesi. Buat dengan `openssl rand -base64 32`. Mengubahnya membuat semua sesi keluar. |
-| `SETUP_TOKEN` | Ya | Membuka halaman `/setup` yang hanya berjalan sekali. Isi dengan string acak yang panjang. |
-| `MAYAR_API_KEY` | Ya | API key Mayar. Key sandbox dan production berbeda. |
-| `BETTER_AUTH_URL` | Tidak | URL publik Anda. Tanpa ini, Better Auth membaca origin dari setiap request. |
+| `BETTER_AUTH_SECRET` | Ya | Menandatangani cookie sesi. Buat dengan `openssl rand -base64 32`. Menggantinya mengeluarkan semua orang. |
+| `SETUP_TOKEN` | Ya | Membuka halaman `/setup` yang hanya berjalan sekali. Teks acak yang panjang. |
+| `OPENROUTER_API_KEY` | Ya | Membayar setiap gambar yang dibuat. **Pasang batas pengeluaran padanya.** |
+| `MAYAR_API_KEY` | Ya | Menjual paket kredit. Kunci sandbox dan produksi berbeda. |
+| `BETTER_AUTH_URL` | Tidak | URL publik Anda. Tanpa ini, Better Auth membaca origin dari tiap permintaan. |
 | `MAYAR_ENVIRONMENT` | Tidak | `sandbox` (bawaan) atau `production`. Diatur di `wrangler.jsonc`. |
-| `SHIPPING_FLAT_RATE` | Tidak | Ongkos kirim flat dalam IDR, dikenakan sekali per pesanan. Diatur di `wrangler.jsonc`. |
 
-Biarkan `MAYAR_ENVIRONMENT=sandbox` sampai Anda berhasil menyelesaikan satu
-checkout percobaan.
+Biarkan `MAYAR_ENVIRONMENT=sandbox` sampai satu pembelian uji berhasil.
 
 ## Setelah deploy pertama
 
-Sebuah tombol **?** mengambang muncul di pojok kiri bawah setiap halaman selama
-setup belum selesai, dan membuka checklist yang sama ini dalam bentuk sheet.
-Tombol itu hilang selamanya begitu `/setup` selesai, jadi pembeli tidak pernah
-melihatnya. Daftar langkahnya ada di
-[`src/lib/setup-guide.ts`](src/lib/setup-guide.ts) — ubah file itu dan bagian
-ini bersamaan, kalau tidak keduanya akan berbeda isi.
+Tombol **?** mengambang di sudut kiri bawah setiap halaman selama setup belum
+selesai, dan membuka daftar yang sama dalam panel. Tombol itu hilang permanen
+begitu `/setup` selesai, jadi pengguna tidak pernah melihatnya. Langkah-langkah
+tersebut ada di [`src/lib/setup-guide.ts`](src/lib/setup-guide.ts) — sunting
+berkas itu bersama bagian ini, atau keduanya akan menyimpang.
 
 1. Selesaikan `/setup`.
 2. Daftarkan URL webhook Mayar yang ditampilkan halaman setup. Ini opsional;
-   lihat [Alur pembayaran](#alur-pembayaran).
-3. Set `BETTER_AUTH_URL` ke URL publik Anda. Disarankan: tanpa ini, pemeriksaan
-   origin akan percaya pada host mana pun yang melayani request tersebut.
-4. Pertimbangkan lokasi database D1 Anda. Deploy sekali klik tidak bisa memilih
-   lokasi primary. Untuk memindahkannya, buat database dengan
+   lihat [Membeli kredit](#membeli-kredit).
+3. Setel `BETTER_AUTH_URL` ke URL publik Anda. Disarankan: tanpa itu,
+   pemeriksaan origin mempercayai host mana pun yang melayani permintaan.
+4. Pasang batas pengeluaran pada kunci OpenRouter. Kunci itu membayar setiap
+   gambar, jadi batas tersebut yang menahan bug atau penyalahguna dari
+   menghabiskan saldo dalam semalam.
+5. Periksa harga. Lihat [Kredit dan harga](#kredit-dan-harga) — angka yang
+   dikirim di sini diukur terhadap harga model tertentu dan kurs tertentu, dan
+   keduanya bergerak.
+6. Pertimbangkan lokasi basis data D1 Anda. Deploy satu klik tidak dapat memilih
+   lokasi utama. Untuk memindahkannya, buat basis data dengan
    `wrangler d1 create <nama> --location <hint>` lalu arahkan binding ke sana.
 
-## Alur pembayaran
+## Kredit dan harga
 
-1. Checkout menahan stok tersedia selama 30 menit dan menulis pesanan, itemnya,
-   data penahanan stok, serta catatan idempotency dalam satu batch D1. Kelebihan
-   jual ditolak oleh check constraint, yang membatalkan seluruh batch.
-2. Server membuat invoice Mayar dari snapshot pesanan.
-3. Pembeli membayar lalu kembali ke halaman status pesanan.
-4. Pembayaran dibuktikan dengan mengambil detail transaksi Mayar dan mencocokkan
-   nominal, status `paid`, dan pesanan di `extraData`. Kembalinya browser tidak
-   pernah menandai pesanan lunas, begitu juga payload webhook dengan sendirinya.
-5. Halaman status pesanan memeriksa pembayaran saat dimuat, pada jadwal ulang
-   yang singkat, dan ketika tab kembali aktif.
-6. Setiap lima menit sebuah cron trigger merekonsiliasi pesanan yang masa
-   penahanan stoknya sudah lewat. Mayar ditanya lebih dulu: pesanan yang sudah
-   dibayar diselesaikan, yang belum dibatalkan dan stoknya dikembalikan, dan
-   yang tidak bisa diverifikasi ditinggalkan untuk putaran berikutnya.
-7. Resync pembayaran di admin memakai gerbang bukti yang sama dengan refresh
-   dari sisi pembeli.
+Semua di bawah ini adalah satu suntingan di
+[`src/lib/pricing.ts`](src/lib/pricing.ts).
 
-**Webhook bersifat opsional.** Webhook hanya mempercepat konfirmasi. Karena
-pembayaran selalu dibuktikan lewat pencarian transaksi, dan karena cron
-merekonsiliasi pesanan yang kedaluwarsa, toko yang tidak pernah mendaftarkan
-webhook tetap berjalan benar.
+| Resolusi | Keluaran pada 16:9 | Kredit | Waktu tunggu umum |
+| --- | --- | --- | --- |
+| 1K | 1376×768 | 2 | ~11 detik |
+| 2K | 2752×1536 | 3 | ~14 detik |
+| 4K | 5504×3072 | 5 | ~30 detik |
 
-Refund diselesaikan di dashboard Mayar, lalu ditandai sebagai refunded di panel
-admin. Tidak ada endpoint refund tidak terdokumentasi yang dipanggil.
+Gambar referensi gratis — hasil pengukuran menambah sekitar $0,0005 per gambar.
+Akun baru mendapat 4 kredit. Paket bawaan: 20 / Rp 35.000, 60 / Rp 95.000, dan
+200 / Rp 280.000.
+
+**Mengapa angka itu, dan apa yang harus diperiksa sebelum menggantinya:** tangga
+harga ini sebanding dengan biaya hulu yang diukur, direncanakan pada
+Rp 18.000 per USD, dengan batas bawah Rp 1.400 per kredit. Pendapatan Anda dalam
+rupiah sedangkan tagihan OpenRouter dalam dolar, jadi rupiah yang melemah
+memakan margin dan aplikasi tidak akan memberi tahu Anda. Pengukuran,
+perhitungan, dan alasan tidak adanya tingkat 512 ada di
+[ADR-0018](docs/adr/0018-price-credits-from-measured-cost.md).
+
+## Membuat gambar
+
+1. Peramban membuat kunci idempotensi, menyimpannya, lalu mengirim prompt.
+2. Worker menulis baris `generation` dan mengambil kreditnya dalam **satu** batch
+   D1. Saldo yang akan menjadi negatif ditolak oleh check constraint, yang
+   membatalkan seluruh batch. Satu akun hanya boleh punya satu pembuatan gambar
+   yang sedang berjalan.
+3. Model dipanggil. Promise-nya diserahkan ke `waitUntil` **dan** ditunggu,
+   sehingga tab yang ditutup di tengah proses tetap mendapatkan gambarnya di
+   riwayat.
+4. Jika berhasil, gambar ditulis ke R2 di bawah prefiks pemiliknya, dan
+   `usage.cost` dicatat pada baris tersebut.
+5. Jika gagal, kredit dikembalikan — kecuali untuk prompt yang diblokir penyedia
+   karena isinya, yang sengaja tidak dikembalikan. Tiga blokir dalam satu jam
+   menghentikan akun itu untuk sementara.
+6. Setiap lima menit, cron mengembalikan kredit untuk pembuatan gambar yang
+   tersangkut.
+
+Gambar bersifat pribadi, disajikan dengan `Cache-Control: private` di balik
+pemeriksaan sesi. Pemilik dapat membagikan satu gambar dari `/history`, yang
+membuat tautan publik di `/s/:token` dan mengecualikan gambar itu dari
+penghapusan berkala 90 hari.
+
+## Membeli kredit
+
+1. Pembeli memilih paket. Mayar mewajibkan nomor ponsel pada setiap invoice,
+   jadi pembeli ditanya sekali dan nomornya diingat.
+2. Server membuat invoice Mayar dan menyimpan ID-nya. Invoice tertunda untuk
+   paket yang sama dipakai ulang, bukan diganti, karena Mayar menjawab
+   pembuatan ganda dengan `429`.
+3. Pembayaran dibuktikan dengan mengambil detail transaksi Mayar dan mencocokkan
+   jumlah, status `paid`, dan pembelian di `extraData`. Kembalinya peramban
+   tidak pernah memberi kredit, begitu pula payload webhook sendirian.
+4. Kredit diberikan lewat entri buku besar dengan referensi unik, sehingga
+   webhook yang terulang, tombol periksa ulang, dan cron tidak dapat memberi
+   kredit dua kali.
+5. Setiap lima menit, cron menyelesaikan pembelian yang webhook-nya tidak pernah
+   tiba, dan menutup invoice yang kedaluwarsa tanpa dibayar.
+
+**Webhook bersifat opsional.** Webhook hanya mempercepat datangnya kredit.
+Karena pembayaran selalu dibuktikan lewat pencarian transaksi, dan karena cron
+merekonsiliasi pembelian tertunda, deploy yang tidak pernah mendaftarkan webhook
+tetap benar.
+
+Pengembalian dana diselesaikan di dasbor Mayar. Setelah itu sesuaikan saldo dari
+`/admin/accounts`, yang menulis entri buku besar beserta alasan Anda.
 
 ## Rute
 
 Publik:
 
-- `/` — halaman depan toko
-- `/products` — koleksi, filter kategori, dan pencarian
-- `/products/:slug` — detail produk
-- `/cart` — keranjang lokal
-- `/checkout` — checkout tamu dan alamat pengiriman
-- `/orders/:token` — status pesanan tamu yang ditandatangani
-- `/orders/find` — cari pesanan tamu dengan email + nomor pesanan
-- `/sign-in`, `/sign-up`, `/account`, `/account/orders`
-- `/legal/privacy`, `/legal/terms`, `/legal/shipping`, `/legal/refund`
+- `/` — generator, dapat dipakai tanpa masuk, dengan tombol yang meminta masuk
+- `/auth` — masuk dan membuat akun, dalam satu halaman
+- `/s/:token` — gambar yang dibagikan
+- `/legal/privacy`, `/legal/terms`, `/legal/refund`
 - `/setup` — bootstrap sekali jalan, dijaga oleh `SETUP_TOKEN`
+
+Setelah masuk:
+
+- `/history` — semua gambar, dengan sakelar berbaginya
+- `/credits` — paket, pembelian, dan riwayat kredit
+- `/account`
 
 Admin:
 
-- `/admin` — ringkasan
-- `/admin/products` — kategori, pembuatan dan pengarsipan produk, unggah gambar
-- `/admin/orders` — daftar pesanan dan aksi pembayaran/pemenuhan
-- `/admin/orders/:id` — detail pesanan, resync, riwayat status, refund manual
+- `/admin` — kredit beredar, gambar yang dibuat, biaya terhadap pendapatan
+- `/admin/accounts` — saldo dan penyesuaian manual
+- `/admin/purchases` — semua paket terjual, dengan periksa ulang ke Mayar
+- `/admin/failures` — apa yang gagal, dan apakah kreditnya kembali
 
 Server:
 
 - `/api/auth/*` — Better Auth
-- `/api/checkout` — endpoint checkout server, wajib mengirim `Idempotency-Key`
-- `/api/uploads` — unggah gambar oleh admin ke R2
-- `/images/*` — gambar produk yang disajikan dari R2
+- `/api/generate` — membuat gambar, memerlukan `Idempotency-Key`
+- `/api/generations/:id` — menyambung kembali setelah halaman dimuat ulang
+- `/api/uploads` — unggahan gambar referensi ke R2
+- `/api/shared/:token` — byte gambar yang dibagikan, publik dan dapat di-cache
+- `/images/*` — gambar pribadi, di balik pemeriksaan sesi
 - `/api/webhooks/mayar/:secret` — penerima webhook Mayar
 
 ## Perintah yang berguna
 
 ```sh
-bun dev                  # server dev lokal di runtime Workers
-bun run build            # build bundle Worker
-bun run deploy           # jalankan migrasi remote, lalu deploy
-bun run db:generate      # buat migrasi dari skema Drizzle
-bun run db:migrate       # terapkan migrasi ke D1 lokal
-bun run db:migrate:remote# terapkan migrasi ke D1 yang sudah dideploy
-bun run test             # unit test dan test D1
+bun dev                  # server pengembangan lokal di runtime Workers
+bun run build            # membangun bundel Worker
+bun run deploy           # menerapkan migrasi remote, lalu deploy
+bun run db:generate      # membuat migrasi dari skema Drizzle
+bun run db:migrate       # menerapkan migrasi ke D1 lokal
+bun run db:migrate:remote# menerapkan migrasi ke D1 yang sudah dideploy
+bun run test             # uji unit dan uji D1
 bun run typecheck        # TypeScript
 bun run lint             # Biome lewat Ultracite
-bun run cf-typegen       # buat ulang tipe binding setelah mengubah wrangler.jsonc
+bun run cf-typegen       # membuat ulang tipe binding setelah mengubah wrangler.jsonc
 ```
 
 ## Keputusan desain
 
-Alasan di balik arsitekturnya ada di [`docs/adr/`](docs/adr/), dan kosakata
-domainnya di [`CONTEXT.md`](CONTEXT.md). Mulailah dari ADR-0011 untuk pilihan
-database dan ADR-0012 untuk cara checkout tetap atomik tanpa transaksi.
+Alasan di balik arsitektur ini ada di [`docs/adr/`](docs/adr/), dan kosakata
+domainnya di [`CONTEXT.md`](CONTEXT.md). Mulailah dari
+[ADR-0016](docs/adr/0016-keep-the-credit-ledger-in-d1.md) untuk alasan saldo
+tidak bisa menjadi negatif,
+[ADR-0017](docs/adr/0017-run-generation-under-waituntil.md) untuk apa yang
+terjadi saat tab ditutup di tengah proses, dan
+[ADR-0018](docs/adr/0018-price-credits-from-measured-cost.md) untuk harganya.
 
-Catatan: berkas ADR dan `CONTEXT.md` hanya tersedia dalam bahasa Inggris.
+## Catatan untuk pemelihara
 
-## Catatan untuk maintainer
+Berkas ini adalah terjemahan lengkap dari [`README.md`](README.md). Isinya
+salinan kedua dari fakta yang sama, jadi keduanya menyimpang kecuali Anda
+menyunting keduanya. ADR dan `CONTEXT.md` sengaja hanya berbahasa Inggris:
+keduanya lebih sering berubah dan dibaca oleh siapa pun yang mengubah kodenya.
 
-Wrangler menulis kembali ID resource yang sudah disediakan ke dalam
-`wrangler.jsonc` setelah deploy pertama Anda sendiri. Jangan commit ID
-tersebut: ID itu khusus untuk akun Anda, dan binding harus tetap tanpa ID agar
-tombol deploy bisa menyediakan resource baru untuk orang lain.
+Wrangler menulis ID sumber daya kembali ke `wrangler.jsonc` setelah deploy
+pertama Anda sendiri. Jangan commit ID tersebut: ID itu khusus untuk akun Anda,
+dan binding harus tetap tanpa ID agar tombol deploy dapat menyiapkan sumber daya
+baru untuk orang lain.
 
-### Ganti namespace ID rate limiter untuk toko kedua
+### Ganti namespace ID rate limiter untuk deploy kedua
 
-`wrangler.jsonc` mendeklarasikan enam rate limiter dengan namespace ID `1001`
-sampai `1006`. Namespace ID berlaku untuk seluruh akun Cloudflare Anda, bukan
+`wrangler.jsonc` mendeklarasikan lima rate limiter dengan namespace ID `2001`
+sampai `2005`. Namespace ID berlaku untuk seluruh akun Cloudflare Anda, bukan
 untuk satu Worker, dan
-[binding yang memakai ID sama akan berbagi penghitung yang sama](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/).
+[binding yang berbagi satu namespace juga berbagi penghitungnya](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/).
 
-Jadi berikan nomor tersendiri untuk tiap toko jika salah satu hal ini benar:
+Jadi berikan nomor tersendiri untuk tiap deploy jika salah satu ini benar:
 
-- Anda mendeploy template ini lebih dari sekali di akun yang sama. Toko staging
-  dan toko production yang sama-sama memakai `1001` tidak mendapat satu limit
-  masing-masing. Keduanya berbagi satu limit, dan trafik ke salah satunya
-  menghabiskan jatah itu.
-- Worker lain di akun Anda sudah memakai nomor dalam rentang tersebut.
+- Anda men-deploy templat ini lebih dari sekali pada akun yang sama. Salinan
+  staging dan salinan produksi pada `2001` tidak mendapat batas masing-masing.
+  Keduanya berbagi satu batas, dan lalu lintas ke salah satunya menghabiskannya.
+- Worker lain di akun Anda sudah memakai nomor dalam rentang itu. Rentang `1000`
+  milik templat ecommerce yang menjadi asal proyek ini.
 
-Satu toko di akun baru tidak perlu diubah.
+Satu deploy pada akun baru tidak perlu diubah.

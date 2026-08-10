@@ -1,97 +1,149 @@
-import { and, eq, inArray, lt } from "drizzle-orm";
+import { env } from "cloudflare:workers";
+import { and, eq, inArray, isNull, lt } from "drizzle-orm";
 
 import { getDb } from "@/db";
-import { orders, webhookEvents } from "@/db/schema";
+import { creditPurchases, generations, webhookEvents } from "@/db/schema";
+import { abandonGeneration } from "@/lib/generation";
 import {
-  countExpiredReservationOrders,
-  listExpiredReservationOrderIds,
-  releaseOrderReservation,
-} from "@/lib/inventory";
-import {
-  createMayarVerificationPayload,
-  getMayarTransaction,
-  isMayarPaid,
-} from "@/lib/mayar";
-import { processMayarWebhook } from "@/lib/payment.functions";
+  GENERATION_TIMEOUT_MINUTES,
+  IMAGE_RETENTION_DAYS,
+} from "@/lib/pricing";
+import { reconcilePurchase } from "@/lib/purchase.functions";
 
 // Mayar allows 50 requests per minute for each API key. One provider call per
-// order, well under the limit at a five minute schedule. See ADR-0010.
-const MAX_ORDERS_PER_RUN = 40;
+// purchase, well under the limit at a five minute schedule.
+const MAX_PURCHASES_PER_RUN = 30;
+
+/** R2 deletes are cheap, but a run should still end. */
+const MAX_IMAGES_PER_RUN = 200;
 
 // Webhook payloads are raw provider data and hold customer details. They are
 // kept long enough to investigate a payment dispute, then dropped.
 const WEBHOOK_RETENTION_DAYS = 30;
 
-type ReconcileResult = {
-  cancelled: number;
-  examined: number;
-  remaining: number;
-  settled: number;
-  skipped: number;
-};
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Settles or cancels orders whose stock reservation has expired.
+ * Refunds generations that never came back.
  *
- * An order is never cancelled on age alone. A buyer may have paid and closed
- * the tab, and without a registered webhook nothing else would notice. Mayar is
- * asked first, and only an order with no payment is cancelled. See ADR-0010.
+ * The work runs under `waitUntil` and normally settles itself. This is for the
+ * cases it cannot: an isolate evicted mid-flight, or a provider that accepted
+ * the request and never answered. Credits taken for an image nobody received
+ * always come back. See ADR-0017.
  */
-export async function reconcileExpiredOrders(
-  now = new Date()
-): Promise<ReconcileResult> {
-  // The scan is bounded in SQL rather than in JavaScript, so a large backlog
-  // does not read every expired row on every run.
-  const [batch, total] = await Promise.all([
-    listExpiredReservationOrderIds(now, MAX_ORDERS_PER_RUN),
-    countExpiredReservationOrders(now),
-  ]);
-  const result: ReconcileResult = {
-    cancelled: 0,
-    examined: batch.length,
-    remaining: Math.max(0, total - batch.length),
-    settled: 0,
-    skipped: 0,
-  };
+export async function refundStuckGenerations(now = new Date()) {
+  const cutoff = new Date(now.getTime() - GENERATION_TIMEOUT_MINUTES * 60_000);
+  const stuck = await getDb().query.generations.findMany({
+    limit: 50,
+    where: and(
+      eq(generations.status, "pending"),
+      lt(generations.createdAt, cutoff)
+    ),
+  });
 
-  for (const orderId of batch) {
-    // biome-ignore lint/performance/noAwaitInLoops: Provider calls are serial on purpose, to stay inside the Mayar rate limit.
-    const settled = await settleIfPaid(orderId);
+  for (const generation of stuck) {
+    // biome-ignore lint/performance/noAwaitInLoops: Each refund is its own batch, and a failure must not take the rest of the run with it.
+    await abandonGeneration(generation).catch((error) => {
+      console.error(`Could not refund generation ${generation.id}`, error);
+    });
+  }
 
-    if (settled === "paid") {
-      result.settled += 1;
+  return stuck.length;
+}
+
+/**
+ * Settles purchases whose webhook never arrived.
+ *
+ * Registering the webhook is optional, so this is the only thing that credits
+ * an account on a store that skipped it. It calls the same settlement path as
+ * the webhook, which is what makes running both safe. See ADR-0007.
+ */
+export async function reconcilePendingPurchases(now = new Date()) {
+  const pending = await getDb().query.creditPurchases.findMany({
+    limit: MAX_PURCHASES_PER_RUN,
+    where: and(
+      eq(creditPurchases.status, "pending"),
+      isNull(creditPurchases.creditedAt)
+    ),
+  });
+
+  let settled = 0;
+  let expired = 0;
+
+  for (const purchase of pending) {
+    // biome-ignore lint/performance/noAwaitInLoops: One provider call at a time keeps this inside Mayar's rate limit.
+    const result = await reconcilePurchase(purchase.id).catch((error) => {
+      console.error(
+        `Could not reconcile purchase ${purchase.reference}`,
+        error
+      );
+
+      return { settled: false };
+    });
+
+    if (result.settled) {
+      settled += 1;
       continue;
     }
 
-    if (settled === "unknown") {
-      // The provider could not be reached. Leave the order alone and try again
-      // on the next run, because cancelling a paid order is unrecoverable.
-      result.skipped += 1;
+    // An unpaid invoice past its own expiry is closed, so it stops being
+    // examined on every run from now on.
+    if (purchase.expiresAt && purchase.expiresAt < now) {
+      await getDb()
+        .update(creditPurchases)
+        .set({ status: "expired", updatedAt: now })
+        .where(eq(creditPurchases.id, purchase.id));
+
+      expired += 1;
+    }
+  }
+
+  return { examined: pending.length, expired, settled };
+}
+
+/**
+ * Deletes generated images past their retention window.
+ *
+ * A shared image is skipped: a link handed to somebody should not rot. The row
+ * stays either way, so history keeps the prompt and what it cost. See ADR-0020.
+ */
+export async function sweepExpiredImages(now = new Date()) {
+  const cutoff = new Date(now.getTime() - IMAGE_RETENTION_DAYS * DAY_MS);
+  const expired = await getDb().query.generations.findMany({
+    limit: MAX_IMAGES_PER_RUN,
+    where: and(
+      eq(generations.status, "succeeded"),
+      isNull(generations.shareToken),
+      lt(generations.createdAt, cutoff)
+    ),
+  });
+
+  let removed = 0;
+
+  for (const generation of expired) {
+    if (!generation.objectKey) {
       continue;
     }
 
     try {
-      await releaseOrderReservation(orderId, "expired", now);
-      result.cancelled += 1;
+      // biome-ignore lint/performance/noAwaitInLoops: The object has to be gone before the key is cleared, or the key is lost and the object leaks.
+      await env.BUCKET.delete(generation.objectKey);
+      await getDb()
+        .update(generations)
+        .set({ mediaType: null, objectKey: null, updatedAt: now })
+        .where(eq(generations.id, generation.id));
+
+      removed += 1;
     } catch (error) {
-      result.skipped += 1;
-      console.error(`Failed to release reservation for ${orderId}`, error);
+      console.error(`Could not delete image ${generation.objectKey}`, error);
     }
   }
 
-  return result;
+  return removed;
 }
 
-/**
- * Drops webhook payloads that have outlived their purpose.
- *
- * Only settled events are removed. A `failed` row is evidence of something that
- * still needs attention, so it stays.
- */
 export async function pruneSettledWebhookEvents(now = new Date()) {
-  const cutoff = new Date(
-    now.getTime() - WEBHOOK_RETENTION_DAYS * 24 * 60 * 60 * 1000
-  );
+  const cutoff = new Date(now.getTime() - WEBHOOK_RETENTION_DAYS * DAY_MS);
   const deleted = await getDb()
     .delete(webhookEvents)
     .where(
@@ -103,40 +155,4 @@ export async function pruneSettledWebhookEvents(now = new Date()) {
     .returning({ id: webhookEvents.id });
 
   return deleted.length;
-}
-
-async function settleIfPaid(
-  orderId: string
-): Promise<"paid" | "unknown" | "unpaid"> {
-  const [order] = await getDb()
-    .select({ transactionId: orders.mayarTransactionId })
-    .from(orders)
-    .where(eq(orders.id, orderId))
-    .limit(1);
-
-  if (!order?.transactionId) {
-    return "unpaid";
-  }
-
-  try {
-    const transaction = await getMayarTransaction(order.transactionId);
-
-    if (!isMayarPaid(transaction.status)) {
-      return "unpaid";
-    }
-
-    await processMayarWebhook(
-      createMayarVerificationPayload(
-        `scheduled-reconcile-${orderId}-${transaction.id}`,
-        transaction
-      ),
-      { verifiedTransactionId: transaction.id }
-    );
-
-    return "paid";
-  } catch (error) {
-    console.error(`Could not verify payment for order ${orderId}`, error);
-
-    return "unknown";
-  }
 }

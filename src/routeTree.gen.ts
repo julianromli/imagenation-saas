@@ -12,32 +12,25 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as AdminRouteImport } from './routes/admin'
-import { Route as CartRouteImport } from './routes/cart'
-import { Route as CheckoutRouteImport } from './routes/checkout'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as CreditsRouteImport } from './routes/credits'
+import { Route as HistoryRouteImport } from './routes/history'
 import { Route as SetupRouteImport } from './routes/setup'
-import { Route as SignInRouteImport } from './routes/sign-in'
-import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as AccountIndexRouteImport } from './routes/account/index'
-import { Route as AccountOrdersRouteImport } from './routes/account/orders'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
-import { Route as AdminCategoriesRouteImport } from './routes/admin/categories'
-import { Route as AdminOrdersRouteImport } from './routes/admin/orders'
-import { Route as AdminProductsRouteImport } from './routes/admin/products'
-import { Route as ApiCheckoutRouteImport } from './routes/api/checkout'
+import { Route as AdminAccountsRouteImport } from './routes/admin/accounts'
+import { Route as AdminFailuresRouteImport } from './routes/admin/failures'
+import { Route as AdminPurchasesRouteImport } from './routes/admin/purchases'
+import { Route as ApiGenerateRouteImport } from './routes/api/generate'
 import { Route as ApiUploadsRouteImport } from './routes/api/uploads'
 import { Route as ImagesSplatRouteImport } from './routes/images/$'
 import { Route as LegalPrivacyRouteImport } from './routes/legal/privacy'
 import { Route as LegalRefundRouteImport } from './routes/legal/refund'
-import { Route as LegalShippingRouteImport } from './routes/legal/shipping'
 import { Route as LegalTermsRouteImport } from './routes/legal/terms'
-import { Route as OrdersTokenRouteImport } from './routes/orders/$token'
-import { Route as OrdersFindRouteImport } from './routes/orders/find'
-import { Route as ProductsIndexRouteImport } from './routes/products/index'
-import { Route as ProductsSlugRouteImport } from './routes/products/$slug'
-import { Route as AccountOrdersIndexRouteImport } from './routes/account/orders/index'
-import { Route as AccountOrdersIdRouteImport } from './routes/account/orders/$id'
-import { Route as AdminOrdersIdRouteImport } from './routes/admin/orders/$id'
+import { Route as STokenRouteImport } from './routes/s/$token'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiGenerationsIdRouteImport } from './routes/api/generations.$id'
+import { Route as ApiSharedTokenRouteImport } from './routes/api/shared.$token'
 import { Route as ApiWebhooksMayarSecretRouteImport } from './routes/api/webhooks/mayar.$secret'
 
 const IndexRoute = IndexRouteImport.update({
@@ -55,14 +48,19 @@ const AdminRoute = AdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CartRoute = CartRouteImport.update({
-  id: '/cart',
-  path: '/cart',
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CheckoutRoute = CheckoutRouteImport.update({
-  id: '/checkout',
-  path: '/checkout',
+const CreditsRoute = CreditsRouteImport.update({
+  id: '/credits',
+  path: '/credits',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HistoryRoute = HistoryRouteImport.update({
+  id: '/history',
+  path: '/history',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SetupRoute = SetupRouteImport.update({
@@ -70,24 +68,9 @@ const SetupRoute = SetupRouteImport.update({
   path: '/setup',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SignInRoute = SignInRouteImport.update({
-  id: '/sign-in',
-  path: '/sign-in',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SignUpRoute = SignUpRouteImport.update({
-  id: '/sign-up',
-  path: '/sign-up',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AccountIndexRoute = AccountIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AccountRoute,
-} as any)
-const AccountOrdersRoute = AccountOrdersRouteImport.update({
-  id: '/orders',
-  path: '/orders',
   getParentRoute: () => AccountRoute,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
@@ -95,24 +78,24 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminCategoriesRoute = AdminCategoriesRouteImport.update({
-  id: '/categories',
-  path: '/categories',
+const AdminAccountsRoute = AdminAccountsRouteImport.update({
+  id: '/accounts',
+  path: '/accounts',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminOrdersRoute = AdminOrdersRouteImport.update({
-  id: '/orders',
-  path: '/orders',
+const AdminFailuresRoute = AdminFailuresRouteImport.update({
+  id: '/failures',
+  path: '/failures',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminProductsRoute = AdminProductsRouteImport.update({
-  id: '/products',
-  path: '/products',
+const AdminPurchasesRoute = AdminPurchasesRouteImport.update({
+  id: '/purchases',
+  path: '/purchases',
   getParentRoute: () => AdminRoute,
 } as any)
-const ApiCheckoutRoute = ApiCheckoutRouteImport.update({
-  id: '/api/checkout',
-  path: '/api/checkout',
+const ApiGenerateRoute = ApiGenerateRouteImport.update({
+  id: '/api/generate',
+  path: '/api/generate',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiUploadsRoute = ApiUploadsRouteImport.update({
@@ -135,54 +118,29 @@ const LegalRefundRoute = LegalRefundRouteImport.update({
   path: '/legal/refund',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LegalShippingRoute = LegalShippingRouteImport.update({
-  id: '/legal/shipping',
-  path: '/legal/shipping',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const LegalTermsRoute = LegalTermsRouteImport.update({
   id: '/legal/terms',
   path: '/legal/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
-const OrdersTokenRoute = OrdersTokenRouteImport.update({
-  id: '/orders/$token',
-  path: '/orders/$token',
+const STokenRoute = STokenRouteImport.update({
+  id: '/s/$token',
+  path: '/s/$token',
   getParentRoute: () => rootRouteImport,
-} as any)
-const OrdersFindRoute = OrdersFindRouteImport.update({
-  id: '/orders/find',
-  path: '/orders/find',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProductsIndexRoute = ProductsIndexRouteImport.update({
-  id: '/products/',
-  path: '/products/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProductsSlugRoute = ProductsSlugRouteImport.update({
-  id: '/products/$slug',
-  path: '/products/$slug',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AccountOrdersIndexRoute = AccountOrdersIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AccountOrdersRoute,
-} as any)
-const AccountOrdersIdRoute = AccountOrdersIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => AccountOrdersRoute,
-} as any)
-const AdminOrdersIdRoute = AdminOrdersIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => AdminOrdersRoute,
 } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiGenerationsIdRoute = ApiGenerationsIdRouteImport.update({
+  id: '/api/generations/$id',
+  path: '/api/generations/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSharedTokenRoute = ApiSharedTokenRouteImport.update({
+  id: '/api/shared/$token',
+  path: '/api/shared/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiWebhooksMayarSecretRoute = ApiWebhooksMayarSecretRouteImport.update({
@@ -195,61 +153,48 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/account': typeof AccountRouteWithChildren
   '/admin': typeof AdminRouteWithChildren
-  '/cart': typeof CartRoute
-  '/checkout': typeof CheckoutRoute
+  '/auth': typeof AuthRoute
+  '/credits': typeof CreditsRoute
+  '/history': typeof HistoryRoute
   '/setup': typeof SetupRoute
-  '/sign-in': typeof SignInRoute
-  '/sign-up': typeof SignUpRoute
-  '/account/orders': typeof AccountOrdersRouteWithChildren
-  '/admin/categories': typeof AdminCategoriesRoute
-  '/admin/orders': typeof AdminOrdersRouteWithChildren
-  '/admin/products': typeof AdminProductsRoute
-  '/api/checkout': typeof ApiCheckoutRoute
+  '/admin/accounts': typeof AdminAccountsRoute
+  '/admin/failures': typeof AdminFailuresRoute
+  '/admin/purchases': typeof AdminPurchasesRoute
+  '/api/generate': typeof ApiGenerateRoute
   '/api/uploads': typeof ApiUploadsRoute
   '/images/$': typeof ImagesSplatRoute
   '/legal/privacy': typeof LegalPrivacyRoute
   '/legal/refund': typeof LegalRefundRoute
-  '/legal/shipping': typeof LegalShippingRoute
   '/legal/terms': typeof LegalTermsRoute
-  '/orders/$token': typeof OrdersTokenRoute
-  '/orders/find': typeof OrdersFindRoute
-  '/products/$slug': typeof ProductsSlugRoute
+  '/s/$token': typeof STokenRoute
   '/account/': typeof AccountIndexRoute
   '/admin/': typeof AdminIndexRoute
-  '/products/': typeof ProductsIndexRoute
-  '/account/orders/$id': typeof AccountOrdersIdRoute
-  '/admin/orders/$id': typeof AdminOrdersIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/account/orders/': typeof AccountOrdersIndexRoute
+  '/api/generations/$id': typeof ApiGenerationsIdRoute
+  '/api/shared/$token': typeof ApiSharedTokenRoute
   '/api/webhooks/mayar/$secret': typeof ApiWebhooksMayarSecretRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/cart': typeof CartRoute
-  '/checkout': typeof CheckoutRoute
+  '/auth': typeof AuthRoute
+  '/credits': typeof CreditsRoute
+  '/history': typeof HistoryRoute
   '/setup': typeof SetupRoute
-  '/sign-in': typeof SignInRoute
-  '/sign-up': typeof SignUpRoute
-  '/admin/categories': typeof AdminCategoriesRoute
-  '/admin/orders': typeof AdminOrdersRouteWithChildren
-  '/admin/products': typeof AdminProductsRoute
-  '/api/checkout': typeof ApiCheckoutRoute
+  '/admin/accounts': typeof AdminAccountsRoute
+  '/admin/failures': typeof AdminFailuresRoute
+  '/admin/purchases': typeof AdminPurchasesRoute
+  '/api/generate': typeof ApiGenerateRoute
   '/api/uploads': typeof ApiUploadsRoute
   '/images/$': typeof ImagesSplatRoute
   '/legal/privacy': typeof LegalPrivacyRoute
   '/legal/refund': typeof LegalRefundRoute
-  '/legal/shipping': typeof LegalShippingRoute
   '/legal/terms': typeof LegalTermsRoute
-  '/orders/$token': typeof OrdersTokenRoute
-  '/orders/find': typeof OrdersFindRoute
-  '/products/$slug': typeof ProductsSlugRoute
+  '/s/$token': typeof STokenRoute
   '/account': typeof AccountIndexRoute
   '/admin': typeof AdminIndexRoute
-  '/products': typeof ProductsIndexRoute
-  '/account/orders/$id': typeof AccountOrdersIdRoute
-  '/admin/orders/$id': typeof AdminOrdersIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/account/orders': typeof AccountOrdersIndexRoute
+  '/api/generations/$id': typeof ApiGenerationsIdRoute
+  '/api/shared/$token': typeof ApiSharedTokenRoute
   '/api/webhooks/mayar/$secret': typeof ApiWebhooksMayarSecretRoute
 }
 export interface FileRoutesById {
@@ -257,32 +202,25 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/account': typeof AccountRouteWithChildren
   '/admin': typeof AdminRouteWithChildren
-  '/cart': typeof CartRoute
-  '/checkout': typeof CheckoutRoute
+  '/auth': typeof AuthRoute
+  '/credits': typeof CreditsRoute
+  '/history': typeof HistoryRoute
   '/setup': typeof SetupRoute
-  '/sign-in': typeof SignInRoute
-  '/sign-up': typeof SignUpRoute
-  '/account/orders': typeof AccountOrdersRouteWithChildren
-  '/admin/categories': typeof AdminCategoriesRoute
-  '/admin/orders': typeof AdminOrdersRouteWithChildren
-  '/admin/products': typeof AdminProductsRoute
-  '/api/checkout': typeof ApiCheckoutRoute
+  '/admin/accounts': typeof AdminAccountsRoute
+  '/admin/failures': typeof AdminFailuresRoute
+  '/admin/purchases': typeof AdminPurchasesRoute
+  '/api/generate': typeof ApiGenerateRoute
   '/api/uploads': typeof ApiUploadsRoute
   '/images/$': typeof ImagesSplatRoute
   '/legal/privacy': typeof LegalPrivacyRoute
   '/legal/refund': typeof LegalRefundRoute
-  '/legal/shipping': typeof LegalShippingRoute
   '/legal/terms': typeof LegalTermsRoute
-  '/orders/$token': typeof OrdersTokenRoute
-  '/orders/find': typeof OrdersFindRoute
-  '/products/$slug': typeof ProductsSlugRoute
+  '/s/$token': typeof STokenRoute
   '/account/': typeof AccountIndexRoute
   '/admin/': typeof AdminIndexRoute
-  '/products/': typeof ProductsIndexRoute
-  '/account/orders/$id': typeof AccountOrdersIdRoute
-  '/admin/orders/$id': typeof AdminOrdersIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/account/orders/': typeof AccountOrdersIndexRoute
+  '/api/generations/$id': typeof ApiGenerationsIdRoute
+  '/api/shared/$token': typeof ApiSharedTokenRoute
   '/api/webhooks/mayar/$secret': typeof ApiWebhooksMayarSecretRoute
 }
 export interface FileRouteTypes {
@@ -291,93 +229,73 @@ export interface FileRouteTypes {
     | '/'
     | '/account'
     | '/admin'
-    | '/cart'
-    | '/checkout'
+    | '/auth'
+    | '/credits'
+    | '/history'
     | '/setup'
-    | '/sign-in'
-    | '/sign-up'
-    | '/account/orders'
-    | '/admin/categories'
-    | '/admin/orders'
-    | '/admin/products'
-    | '/api/checkout'
+    | '/admin/accounts'
+    | '/admin/failures'
+    | '/admin/purchases'
+    | '/api/generate'
     | '/api/uploads'
     | '/images/$'
     | '/legal/privacy'
     | '/legal/refund'
-    | '/legal/shipping'
     | '/legal/terms'
-    | '/orders/$token'
-    | '/orders/find'
-    | '/products/$slug'
+    | '/s/$token'
     | '/account/'
     | '/admin/'
-    | '/products/'
-    | '/account/orders/$id'
-    | '/admin/orders/$id'
     | '/api/auth/$'
-    | '/account/orders/'
+    | '/api/generations/$id'
+    | '/api/shared/$token'
     | '/api/webhooks/mayar/$secret'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/cart'
-    | '/checkout'
+    | '/auth'
+    | '/credits'
+    | '/history'
     | '/setup'
-    | '/sign-in'
-    | '/sign-up'
-    | '/admin/categories'
-    | '/admin/orders'
-    | '/admin/products'
-    | '/api/checkout'
+    | '/admin/accounts'
+    | '/admin/failures'
+    | '/admin/purchases'
+    | '/api/generate'
     | '/api/uploads'
     | '/images/$'
     | '/legal/privacy'
     | '/legal/refund'
-    | '/legal/shipping'
     | '/legal/terms'
-    | '/orders/$token'
-    | '/orders/find'
-    | '/products/$slug'
+    | '/s/$token'
     | '/account'
     | '/admin'
-    | '/products'
-    | '/account/orders/$id'
-    | '/admin/orders/$id'
     | '/api/auth/$'
-    | '/account/orders'
+    | '/api/generations/$id'
+    | '/api/shared/$token'
     | '/api/webhooks/mayar/$secret'
   id:
     | '__root__'
     | '/'
     | '/account'
     | '/admin'
-    | '/cart'
-    | '/checkout'
+    | '/auth'
+    | '/credits'
+    | '/history'
     | '/setup'
-    | '/sign-in'
-    | '/sign-up'
-    | '/account/orders'
-    | '/admin/categories'
-    | '/admin/orders'
-    | '/admin/products'
-    | '/api/checkout'
+    | '/admin/accounts'
+    | '/admin/failures'
+    | '/admin/purchases'
+    | '/api/generate'
     | '/api/uploads'
     | '/images/$'
     | '/legal/privacy'
     | '/legal/refund'
-    | '/legal/shipping'
     | '/legal/terms'
-    | '/orders/$token'
-    | '/orders/find'
-    | '/products/$slug'
+    | '/s/$token'
     | '/account/'
     | '/admin/'
-    | '/products/'
-    | '/account/orders/$id'
-    | '/admin/orders/$id'
     | '/api/auth/$'
-    | '/account/orders/'
+    | '/api/generations/$id'
+    | '/api/shared/$token'
     | '/api/webhooks/mayar/$secret'
   fileRoutesById: FileRoutesById
 }
@@ -385,23 +303,20 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AccountRoute: typeof AccountRouteWithChildren
   AdminRoute: typeof AdminRouteWithChildren
-  CartRoute: typeof CartRoute
-  CheckoutRoute: typeof CheckoutRoute
+  AuthRoute: typeof AuthRoute
+  CreditsRoute: typeof CreditsRoute
+  HistoryRoute: typeof HistoryRoute
   SetupRoute: typeof SetupRoute
-  SignInRoute: typeof SignInRoute
-  SignUpRoute: typeof SignUpRoute
-  ApiCheckoutRoute: typeof ApiCheckoutRoute
+  ApiGenerateRoute: typeof ApiGenerateRoute
   ApiUploadsRoute: typeof ApiUploadsRoute
   ImagesSplatRoute: typeof ImagesSplatRoute
   LegalPrivacyRoute: typeof LegalPrivacyRoute
   LegalRefundRoute: typeof LegalRefundRoute
-  LegalShippingRoute: typeof LegalShippingRoute
   LegalTermsRoute: typeof LegalTermsRoute
-  OrdersTokenRoute: typeof OrdersTokenRoute
-  OrdersFindRoute: typeof OrdersFindRoute
-  ProductsSlugRoute: typeof ProductsSlugRoute
-  ProductsIndexRoute: typeof ProductsIndexRoute
+  STokenRoute: typeof STokenRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiGenerationsIdRoute: typeof ApiGenerationsIdRoute
+  ApiSharedTokenRoute: typeof ApiSharedTokenRoute
   ApiWebhooksMayarSecretRoute: typeof ApiWebhooksMayarSecretRoute
 }
 
@@ -428,18 +343,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/cart': {
-      id: '/cart'
-      path: '/cart'
-      fullPath: '/cart'
-      preLoaderRoute: typeof CartRouteImport
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/checkout': {
-      id: '/checkout'
-      path: '/checkout'
-      fullPath: '/checkout'
-      preLoaderRoute: typeof CheckoutRouteImport
+    '/credits': {
+      id: '/credits'
+      path: '/credits'
+      fullPath: '/credits'
+      preLoaderRoute: typeof CreditsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/history': {
+      id: '/history'
+      path: '/history'
+      fullPath: '/history'
+      preLoaderRoute: typeof HistoryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/setup': {
@@ -449,32 +371,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SetupRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/sign-in': {
-      id: '/sign-in'
-      path: '/sign-in'
-      fullPath: '/sign-in'
-      preLoaderRoute: typeof SignInRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sign-up': {
-      id: '/sign-up'
-      path: '/sign-up'
-      fullPath: '/sign-up'
-      preLoaderRoute: typeof SignUpRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/account/': {
       id: '/account/'
       path: '/'
       fullPath: '/account/'
       preLoaderRoute: typeof AccountIndexRouteImport
-      parentRoute: typeof AccountRoute
-    }
-    '/account/orders': {
-      id: '/account/orders'
-      path: '/orders'
-      fullPath: '/account/orders'
-      preLoaderRoute: typeof AccountOrdersRouteImport
       parentRoute: typeof AccountRoute
     }
     '/admin/': {
@@ -484,32 +385,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/categories': {
-      id: '/admin/categories'
-      path: '/categories'
-      fullPath: '/admin/categories'
-      preLoaderRoute: typeof AdminCategoriesRouteImport
+    '/admin/accounts': {
+      id: '/admin/accounts'
+      path: '/accounts'
+      fullPath: '/admin/accounts'
+      preLoaderRoute: typeof AdminAccountsRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/orders': {
-      id: '/admin/orders'
-      path: '/orders'
-      fullPath: '/admin/orders'
-      preLoaderRoute: typeof AdminOrdersRouteImport
+    '/admin/failures': {
+      id: '/admin/failures'
+      path: '/failures'
+      fullPath: '/admin/failures'
+      preLoaderRoute: typeof AdminFailuresRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/products': {
-      id: '/admin/products'
-      path: '/products'
-      fullPath: '/admin/products'
-      preLoaderRoute: typeof AdminProductsRouteImport
+    '/admin/purchases': {
+      id: '/admin/purchases'
+      path: '/purchases'
+      fullPath: '/admin/purchases'
+      preLoaderRoute: typeof AdminPurchasesRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/api/checkout': {
-      id: '/api/checkout'
-      path: '/api/checkout'
-      fullPath: '/api/checkout'
-      preLoaderRoute: typeof ApiCheckoutRouteImport
+    '/api/generate': {
+      id: '/api/generate'
+      path: '/api/generate'
+      fullPath: '/api/generate'
+      preLoaderRoute: typeof ApiGenerateRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/uploads': {
@@ -540,13 +441,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LegalRefundRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/legal/shipping': {
-      id: '/legal/shipping'
-      path: '/legal/shipping'
-      fullPath: '/legal/shipping'
-      preLoaderRoute: typeof LegalShippingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/legal/terms': {
       id: '/legal/terms'
       path: '/legal/terms'
@@ -554,60 +448,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LegalTermsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/orders/$token': {
-      id: '/orders/$token'
-      path: '/orders/$token'
-      fullPath: '/orders/$token'
-      preLoaderRoute: typeof OrdersTokenRouteImport
+    '/s/$token': {
+      id: '/s/$token'
+      path: '/s/$token'
+      fullPath: '/s/$token'
+      preLoaderRoute: typeof STokenRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/orders/find': {
-      id: '/orders/find'
-      path: '/orders/find'
-      fullPath: '/orders/find'
-      preLoaderRoute: typeof OrdersFindRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/products/': {
-      id: '/products/'
-      path: '/products'
-      fullPath: '/products/'
-      preLoaderRoute: typeof ProductsIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/products/$slug': {
-      id: '/products/$slug'
-      path: '/products/$slug'
-      fullPath: '/products/$slug'
-      preLoaderRoute: typeof ProductsSlugRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/account/orders/': {
-      id: '/account/orders/'
-      path: '/'
-      fullPath: '/account/orders/'
-      preLoaderRoute: typeof AccountOrdersIndexRouteImport
-      parentRoute: typeof AccountOrdersRoute
-    }
-    '/account/orders/$id': {
-      id: '/account/orders/$id'
-      path: '/$id'
-      fullPath: '/account/orders/$id'
-      preLoaderRoute: typeof AccountOrdersIdRouteImport
-      parentRoute: typeof AccountOrdersRoute
-    }
-    '/admin/orders/$id': {
-      id: '/admin/orders/$id'
-      path: '/$id'
-      fullPath: '/admin/orders/$id'
-      preLoaderRoute: typeof AdminOrdersIdRouteImport
-      parentRoute: typeof AdminOrdersRoute
     }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
       fullPath: '/api/auth/$'
       preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/generations/$id': {
+      id: '/api/generations/$id'
+      path: '/api/generations/$id'
+      fullPath: '/api/generations/$id'
+      preLoaderRoute: typeof ApiGenerationsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/shared/$token': {
+      id: '/api/shared/$token'
+      path: '/api/shared/$token'
+      fullPath: '/api/shared/$token'
+      preLoaderRoute: typeof ApiSharedTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/webhooks/mayar/$secret': {
@@ -620,56 +486,28 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface AccountOrdersRouteChildren {
-  AccountOrdersIdRoute: typeof AccountOrdersIdRoute
-  AccountOrdersIndexRoute: typeof AccountOrdersIndexRoute
-}
-
-const AccountOrdersRouteChildren: AccountOrdersRouteChildren = {
-  AccountOrdersIdRoute: AccountOrdersIdRoute,
-  AccountOrdersIndexRoute: AccountOrdersIndexRoute,
-}
-
-const AccountOrdersRouteWithChildren = AccountOrdersRoute._addFileChildren(
-  AccountOrdersRouteChildren,
-)
-
 interface AccountRouteChildren {
-  AccountOrdersRoute: typeof AccountOrdersRouteWithChildren
   AccountIndexRoute: typeof AccountIndexRoute
 }
 
 const AccountRouteChildren: AccountRouteChildren = {
-  AccountOrdersRoute: AccountOrdersRouteWithChildren,
   AccountIndexRoute: AccountIndexRoute,
 }
 
 const AccountRouteWithChildren =
   AccountRoute._addFileChildren(AccountRouteChildren)
 
-interface AdminOrdersRouteChildren {
-  AdminOrdersIdRoute: typeof AdminOrdersIdRoute
-}
-
-const AdminOrdersRouteChildren: AdminOrdersRouteChildren = {
-  AdminOrdersIdRoute: AdminOrdersIdRoute,
-}
-
-const AdminOrdersRouteWithChildren = AdminOrdersRoute._addFileChildren(
-  AdminOrdersRouteChildren,
-)
-
 interface AdminRouteChildren {
-  AdminCategoriesRoute: typeof AdminCategoriesRoute
-  AdminOrdersRoute: typeof AdminOrdersRouteWithChildren
-  AdminProductsRoute: typeof AdminProductsRoute
+  AdminAccountsRoute: typeof AdminAccountsRoute
+  AdminFailuresRoute: typeof AdminFailuresRoute
+  AdminPurchasesRoute: typeof AdminPurchasesRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
-  AdminCategoriesRoute: AdminCategoriesRoute,
-  AdminOrdersRoute: AdminOrdersRouteWithChildren,
-  AdminProductsRoute: AdminProductsRoute,
+  AdminAccountsRoute: AdminAccountsRoute,
+  AdminFailuresRoute: AdminFailuresRoute,
+  AdminPurchasesRoute: AdminPurchasesRoute,
   AdminIndexRoute: AdminIndexRoute,
 }
 
@@ -679,23 +517,20 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountRoute: AccountRouteWithChildren,
   AdminRoute: AdminRouteWithChildren,
-  CartRoute: CartRoute,
-  CheckoutRoute: CheckoutRoute,
+  AuthRoute: AuthRoute,
+  CreditsRoute: CreditsRoute,
+  HistoryRoute: HistoryRoute,
   SetupRoute: SetupRoute,
-  SignInRoute: SignInRoute,
-  SignUpRoute: SignUpRoute,
-  ApiCheckoutRoute: ApiCheckoutRoute,
+  ApiGenerateRoute: ApiGenerateRoute,
   ApiUploadsRoute: ApiUploadsRoute,
   ImagesSplatRoute: ImagesSplatRoute,
   LegalPrivacyRoute: LegalPrivacyRoute,
   LegalRefundRoute: LegalRefundRoute,
-  LegalShippingRoute: LegalShippingRoute,
   LegalTermsRoute: LegalTermsRoute,
-  OrdersTokenRoute: OrdersTokenRoute,
-  OrdersFindRoute: OrdersFindRoute,
-  ProductsSlugRoute: ProductsSlugRoute,
-  ProductsIndexRoute: ProductsIndexRoute,
+  STokenRoute: STokenRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiGenerationsIdRoute: ApiGenerationsIdRoute,
+  ApiSharedTokenRoute: ApiSharedTokenRoute,
   ApiWebhooksMayarSecretRoute: ApiWebhooksMayarSecretRoute,
 }
 export const routeTree = rootRouteImport

@@ -6,9 +6,9 @@ import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
  * Prepares a local development environment.
  *
  * This script only does the work that needs a terminal: write .dev.vars, mint
- * secrets, and apply migrations to the local D1. Creating the administrator and
- * seeding the catalogue happen at /setup, so that one-click deploys and local
- * clones follow the same path. See ADR-0014.
+ * secrets, and apply migrations to the local D1. Creating the administrator
+ * happens at /setup, so that one-click deploys and local clones follow the
+ * same path. See ADR-0014.
  */
 
 const ENV_PATH = ".dev.vars";
@@ -61,11 +61,13 @@ function ensureSecrets() {
 
 function reportMissing() {
   const contents = readDevVars();
-  const missing = ["MAYAR_API_KEY"].filter((key) => !hasKey(contents, key));
+  const missing = ["OPENROUTER_API_KEY", "MAYAR_API_KEY"].filter(
+    (key) => !hasKey(contents, key)
+  );
 
   if (missing.length > 0) {
     console.log(
-      `\nAdd these to ${ENV_PATH} before checkout will work: ${missing.join(", ")}`
+      `\nAdd these to ${ENV_PATH} before the app can work: ${missing.join(", ")}.\nOPENROUTER_API_KEY generates images. MAYAR_API_KEY sells credits.`
     );
   }
 }
@@ -79,9 +81,9 @@ function printNextSteps() {
   console.log("  2. Open http://localhost:3000/setup");
   console.log(`  3. Use this setup token: ${token}`);
   console.log(
-    "\nThe setup page creates your administrator, seeds the catalogue, and"
+    "\nThe setup page creates your administrator, checks your OpenRouter key,"
   );
-  console.log("shows the Mayar webhook URL to register.");
+  console.log("and shows the Mayar webhook URL to register.");
 }
 
 function main() {

@@ -1,5 +1,5 @@
 /**
- * The steps between a fresh deploy and a store that can take money.
+ * The steps between a fresh deploy and an app that can take money.
  *
  * The same sequence is written out in "Quick start" and "After the first
  * deploy" in README.md. Editing one without the other lets them drift, so the
@@ -14,17 +14,17 @@ export type SetupGuideStep = {
   optional?: boolean;
   title: string;
   /** An in-app destination, when the step has one. */
-  to?: "/admin/products" | "/setup";
+  to?: "/credits" | "/setup";
 };
 
 export const setupGuideSteps: SetupGuideStep[] = [
   {
-    body: "Enter the setup token you chose when you deployed. This creates your administrator account, adds sample products, and shows the Mayar webhook URL. It runs once.",
+    body: "Enter the setup token you chose when you deployed. This creates your administrator account, checks that your OpenRouter key can reach the image model, and shows the Mayar webhook URL. It runs once.",
     title: "Create your administrator",
     to: "/setup",
   },
   {
-    body: "Copy the URL the setup page shows into the Mayar dashboard. Payment is always proved by looking the transaction up with Mayar, and a job reconciles orders every five minutes, so this only makes confirmation faster.",
+    body: "Copy the URL the setup page shows into the Mayar dashboard. Payment is always proved by looking the transaction up with Mayar, and a job reconciles purchases every five minutes, so this only makes credits arrive faster.",
     optional: true,
     title: "Register the Mayar webhook",
   },
@@ -33,12 +33,16 @@ export const setupGuideSteps: SetupGuideStep[] = [
     title: "Set your public URL",
   },
   {
-    body: "The sample catalogue exists so the store is not empty on the first load. Replace it with your own products, prices, and images.",
-    title: "Replace the sample products",
-    to: "/admin/products",
+    body: "Put a spend limit on the OpenRouter key. It pays for every image this app generates, so the limit is what stops a bug or an abuser from draining the balance overnight.",
+    title: "Cap the image spend",
   },
   {
-    body: "Set MAYAR_ENVIRONMENT to production in wrangler.jsonc and swap in your production Mayar API key. Do this after one sandbox checkout has worked end to end, not before.",
+    body: "The credit ladder and the pack prices in src/lib/pricing.ts were measured against a specific model price and a specific exchange rate. Check both before you charge anybody.",
+    title: "Confirm the prices",
+    to: "/credits",
+  },
+  {
+    body: "Set MAYAR_ENVIRONMENT to production in wrangler.jsonc and swap in your production Mayar API key. Do this after one sandbox purchase has worked end to end, not before.",
     title: "Switch to live payments",
   },
 ];

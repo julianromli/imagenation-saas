@@ -1,79 +1,53 @@
 import { z } from "zod";
 
+import {
+  ASPECT_RATIOS,
+  MAX_REFERENCE_IMAGES,
+  RESOLUTION_TIERS,
+} from "@/lib/pricing";
+
 /**
- * The most of one product a single cart line may hold. The browser cart, the
- * server-side merge, and this schema all read it from here, so a merge cannot
- * quietly produce a line the schema would reject.
+ * A prompt long enough to be useful and short enough that it cannot be used to
+ * push the request body around. The model charges for prompt tokens, so this
+ * is a cost limit as much as a validation rule.
  */
-export const MAX_CART_LINE_QUANTITY = 99;
+export const MAX_PROMPT_LENGTH = 4000;
 
-export const cartLineSchema = z.object({
-  productId: z.string().min(1),
-  quantity: z.number().int().min(1).max(MAX_CART_LINE_QUANTITY),
+const resolutionIds = RESOLUTION_TIERS.map((tier) => tier.id) as [
+  string,
+  ...string[],
+];
+
+export const generateSchema = z.object({
+  aspectRatio: z.enum(ASPECT_RATIOS),
+  prompt: z.string().trim().min(1).max(MAX_PROMPT_LENGTH),
+  // R2 object keys, not addresses and not image data. The server reads the
+  // bytes back itself, so a caller cannot point this at somebody else's image
+  // or at a URL of their choosing.
+  referenceKeys: z
+    .array(z.string().min(1))
+    .max(MAX_REFERENCE_IMAGES)
+    .default([]),
+  resolution: z.enum(resolutionIds),
 });
 
-export const cartLinesSchema = z.array(cartLineSchema).min(1).max(50);
-
-export const checkoutSchema = z.object({
-  addressLine: z.string().trim().min(5).max(200),
-  city: z.string().trim().min(2).max(80),
-  email: z.string().trim().email(),
-  guestName: z.string().trim().min(2).max(100),
-  lines: cartLinesSchema,
-  phone: z.string().trim().min(8).max(24),
-  postalCode: z
-    .string()
-    .trim()
-    .regex(/^\d{5}$/),
-  province: z.string().trim().min(2).max(80),
+export const shareSchema = z.object({
+  generationId: z.string().min(1),
+  promptVisible: z.boolean().default(true),
+  shared: z.boolean(),
 });
 
-export const productInputSchema = z.object({
-  categoryId: z.string().nullable().optional(),
-  description: z.string().trim().min(10).max(5000),
-  name: z.string().trim().min(2).max(120),
-  price: z.number().int().min(0),
-  slug: z
-    .string()
-    .trim()
-    .min(2)
-    .max(120)
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-  stock: z.number().int().min(0),
+export const creditAdjustmentSchema = z.object({
+  credits: z
+    .number()
+    .int()
+    .min(-10_000)
+    .max(10_000)
+    .refine((value) => value !== 0, {
+      message: "An adjustment of zero changes nothing",
+    }),
+  note: z.string().trim().min(3).max(200),
+  userId: z.string().min(1),
 });
 
-export const statusUpdateSchema = z.object({
-  note: z.string().trim().max(500).optional(),
-  orderId: z.string().min(1),
-  status: z.enum([
-    "cancelled",
-    "delivered",
-    "paid",
-    "processing",
-    "refunded",
-    "shipped",
-  ]),
-});
-
-export const catalogFiltersSchema = z.object({
-  category: z.string().trim().max(80).optional(),
-  // Bounded, because the value becomes a LIKE pattern scanned across the
-  // catalogue. A caller has no reason to send more than this.
-  search: z.string().trim().max(120).optional(),
-});
-
-export const orderLookupSchema = z.object({
-  email: z.string().trim().email(),
-  orderNumber: z
-    .string()
-    .trim()
-    .min(8)
-    .max(40)
-    .regex(/^THN-\d{14}-[A-Z0-9]{6}$/i),
-});
-
-export type CartLine = z.infer<typeof cartLineSchema>;
-export type CatalogFilters = z.infer<typeof catalogFiltersSchema>;
-export type CheckoutInput = z.infer<typeof checkoutSchema>;
-export type OrderLookupInput = z.infer<typeof orderLookupSchema>;
-export type ProductInput = z.infer<typeof productInputSchema>;
+export type GenerateInput = z.infer<typeof generateSchema>;

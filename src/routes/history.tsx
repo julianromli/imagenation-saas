@@ -1,0 +1,208 @@
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { Check, Copy, Link2, Link2Off } from "lucide-react";
+import { useState } from "react";
+
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { formatMoment } from "@/lib/format";
+import type { GenerationView } from "@/lib/generation.functions";
+import {
+  listGenerations,
+  setGenerationShare,
+} from "@/lib/generation.functions";
+import { shareUrl } from "@/lib/images";
+import { IMAGE_RETENTION_DAYS } from "@/lib/pricing";
+
+export const Route = createFileRoute("/history")({
+  component: HistoryPage,
+  head: () => ({
+    meta: [{ title: "History — Imagenation" }],
+  }),
+  loader: () => listGenerations().catch(() => null),
+});
+
+function HistoryPage() {
+  const generations = Route.useLoaderData();
+
+  if (!generations) {
+    return (
+      <main className="mx-auto max-w-xl px-5 pt-20 pb-32 text-center sm:px-8">
+        <h1 className="font-heading font-medium text-4xl tracking-[-0.05em]">
+          Sign in to see your images.
+        </h1>
+        <Link
+          className="mt-6 inline-flex min-h-11 items-center rounded-full bg-foreground px-5 text-background text-sm"
+          to="/auth"
+        >
+          Sign in
+        </Link>
+      </main>
+    );
+  }
+
+  return (
+    <main className="mx-auto max-w-5xl px-5 pt-12 pb-24 sm:px-8">
+      <h1 className="font-heading font-medium text-4xl tracking-[-0.05em]">
+        History
+      </h1>
+      <p className="mt-3 text-muted-foreground text-sm leading-6">
+        Images are deleted after {IMAGE_RETENTION_DAYS} days. Sharing one keeps
+        it, and its link, for good.
+      </p>
+
+      {generations.length === 0 ? (
+        <div className="mt-12 rounded-3xl border border-border border-dashed px-6 py-16 text-center">
+          <p className="font-medium">Nothing here yet.</p>
+          <p className="mt-2 text-muted-foreground text-sm">
+            Your images will appear here as you make them.
+          </p>
+          <Link
+            className="mt-6 inline-flex min-h-11 items-center rounded-full bg-foreground px-5 text-background text-sm"
+            to="/"
+          >
+            Make one
+          </Link>
+        </div>
+      ) : (
+        <ul className="mt-10 grid gap-6 sm:grid-cols-2">
+          {generations.map((generation) => (
+            <HistoryCard generation={generation} key={generation.id} />
+          ))}
+        </ul>
+      )}
+    </main>
+  );
+}
+
+function HistoryCard({ generation }: { generation: GenerationView }) {
+  const router = useRouter();
+  const [shareToken, setShareToken] = useState(generation.shareToken);
+  const [promptVisible, setPromptVisible] = useState(
+    generation.sharePromptVisible
+  );
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function updateShare(shared: boolean, visible: boolean) {
+    setBusy(true);
+
+    try {
+      const result = await setGenerationShare({
+        data: {
+          generationId: generation.id,
+          promptVisible: visible,
+          shared,
+        },
+      });
+
+      setShareToken(result.shareToken);
+      setPromptVisible(result.sharePromptVisible);
+      await router.invalidate();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyLink() {
+    if (!shareToken) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(
+      `${window.location.origin}${shareUrl(shareToken)}`
+    );
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <li className="flex flex-col gap-3 rounded-3xl border p-4">
+      {generation.imageUrl ? (
+        <img
+          alt={generation.prompt.slice(0, 120)}
+          className="w-full rounded-2xl bg-muted object-cover ring-1 ring-border"
+          src={generation.imageUrl}
+        />
+      ) : (
+        <div className="flex min-h-40 items-center justify-center rounded-2xl bg-muted px-4 text-center text-muted-foreground text-sm">
+          {generation.status === "failed"
+            ? (generation.errorMessage ?? "This one failed")
+            : "This image has been deleted"}
+        </div>
+      )}
+
+      <p className="line-clamp-3 text-sm leading-6">{generation.prompt}</p>
+
+      <p className="flex flex-wrap items-center gap-x-2 text-muted-foreground text-xs">
+        <span>{formatMoment(generation.createdAt)}</span>
+        <span aria-hidden="true">·</span>
+        <span>{generation.resolution}</span>
+        <span aria-hidden="true">·</span>
+        <span>{generation.aspectRatio}</span>
+        <span aria-hidden="true">·</span>
+        <span className="tabular-nums">
+          {generation.refunded
+            ? "refunded"
+            : `${generation.creditCost} ${generation.creditCost === 1 ? "credit" : "credits"}`}
+        </span>
+      </p>
+
+      {generation.status === "succeeded" && generation.imageUrl ? (
+        <div className="mt-auto grid gap-3 border-border/70 border-t pt-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="flex items-center gap-2 text-sm">
+              {shareToken ? (
+                <Link2 aria-hidden="true" className="size-4" />
+              ) : (
+                <Link2Off
+                  aria-hidden="true"
+                  className="size-4 text-muted-foreground"
+                />
+              )}
+              Public link
+            </span>
+            <Switch
+              aria-label="Share this image publicly"
+              checked={Boolean(shareToken)}
+              disabled={busy}
+              onCheckedChange={(checked) =>
+                updateShare(checked === true, promptVisible)
+              }
+            />
+          </div>
+
+          {shareToken ? (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-muted-foreground text-sm">
+                  Show the prompt
+                </span>
+                <Switch
+                  aria-label="Show the prompt on the shared page"
+                  checked={promptVisible}
+                  disabled={busy}
+                  onCheckedChange={(checked) =>
+                    updateShare(true, checked === true)
+                  }
+                />
+              </div>
+              <Button
+                className="min-h-10 rounded-full"
+                onClick={copyLink}
+                type="button"
+                variant="outline"
+              >
+                {copied ? (
+                  <Check aria-hidden="true" className="size-4" />
+                ) : (
+                  <Copy aria-hidden="true" className="size-4" />
+                )}
+                {copied ? "Copied" : "Copy link"}
+              </Button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+    </li>
+  );
+}
