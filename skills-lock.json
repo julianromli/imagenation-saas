@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "mayar-v2": {
+      "source": "mayarid/skills",
+      "sourceType": "github",
+      "skillPath": "skills/mayar-v2/SKILL.md",
+      "computedHash": "8130197dc2943a4a526047d51de9fb815a36f62ceeae6b963b2e2dc77820b057"
+    }
+  }
+}
