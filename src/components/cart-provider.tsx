@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 
-import type { CartLine } from "@/lib/validation";
+import { type CartLine, MAX_CART_LINE_QUANTITY } from "@/lib/validation";
 
 const STORAGE_KEY = "then-ecommerce-cart-v1";
 
@@ -88,7 +88,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
         currentLine.productId === line.productId
           ? {
               ...currentLine,
-              quantity: Math.min(99, currentLine.quantity + line.quantity),
+              quantity: Math.min(
+                MAX_CART_LINE_QUANTITY,
+                currentLine.quantity + line.quantity
+              ),
             }
           : currentLine
       );
@@ -101,7 +104,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
         ? current.filter((line) => line.productId !== productId)
         : current.map((line) =>
             line.productId === productId
-              ? { ...line, quantity: Math.min(99, quantity) }
+              ? {
+                  ...line,
+                  quantity: Math.min(MAX_CART_LINE_QUANTITY, quantity),
+                }
               : line
           )
     );

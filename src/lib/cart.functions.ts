@@ -4,7 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { cartItems, carts, productImages, products } from "@/db/schema";
 import { getSession } from "@/lib/auth.functions";
-import { cartLinesSchema } from "@/lib/validation";
+import { cartLinesSchema, MAX_CART_LINE_QUANTITY } from "@/lib/validation";
 
 async function getOrCreateCart(userId: string) {
   const db = getDb();
@@ -99,7 +99,9 @@ export const mergeCart = createServerFn({ method: "POST" })
         })
         .onConflictDoUpdate({
           set: {
-            quantity: sql`${cartItems.quantity} + ${line.quantity}`,
+            // Capped, because a merge adds to what the line already holds and
+            // could otherwise store more than the cart schema accepts back.
+            quantity: sql`min(${cartItems.quantity} + ${line.quantity}, ${MAX_CART_LINE_QUANTITY})`,
             updatedAt: new Date(),
           },
           target: [cartItems.cartId, cartItems.productId],

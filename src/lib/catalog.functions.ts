@@ -4,11 +4,7 @@ import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { getDb } from "@/db";
 import { categories, productImages, products } from "@/db/schema";
-
-type CatalogFilters = {
-  category?: string;
-  search?: string;
-};
+import { catalogFiltersSchema } from "@/lib/validation";
 
 type ProductRow = {
   categoryName: string | null;
@@ -86,7 +82,7 @@ export const getCategories = createServerFn({ method: "GET" }).handler(() => {
 });
 
 export const getProducts = createServerFn({ method: "GET" })
-  .validator((data: CatalogFilters = {}) => data)
+  .validator((data: unknown = {}) => catalogFiltersSchema.parse(data))
   .handler(async ({ data }) => {
     cacheCatalogResponse();
 

@@ -1,3 +1,14 @@
 # https://www.robotstxt.org/robotstxt.html
 User-agent: *
-Disallow:
+Allow: /
+
+# Nothing here belongs in a search result. Order status pages carry a secret
+# token in the path, so they are unlisted rather than private, and a crawler
+# that finds one must not publish it.
+Disallow: /account
+Disallow: /admin
+Disallow: /api/
+Disallow: /cart
+Disallow: /checkout
+Disallow: /orders
+Disallow: /setup

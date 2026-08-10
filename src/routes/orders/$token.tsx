@@ -101,23 +101,21 @@ function OrderStatusPage() {
         refreshPayment(true).catch(() => undefined);
       }, delay)
     );
-    const refreshOnFocus = () => {
-      refreshPayment(true).catch(() => undefined);
-    };
+    // Returning to the tab raises both `focus` and `visibilitychange`. Only
+    // visibility is watched, because two listeners meant two identical calls
+    // for one return, and the refresh limiter counts each one.
     const refreshOnVisibility = () => {
       if (document.visibilityState === "visible") {
         refreshPayment(true).catch(() => undefined);
       }
     };
 
-    window.addEventListener("focus", refreshOnFocus);
     document.addEventListener("visibilitychange", refreshOnVisibility);
 
     return () => {
       for (const timer of retryTimers) {
         window.clearTimeout(timer);
       }
-      window.removeEventListener("focus", refreshOnFocus);
       document.removeEventListener("visibilitychange", refreshOnVisibility);
     };
   }, [order.status, refreshPayment]);
