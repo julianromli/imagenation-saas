@@ -65,6 +65,16 @@
         "limit": 60,
         "period": 60
       }
+    },
+    // Setup runs once for the whole store, so this is keyed on a constant
+    // rather than on the caller. A wrong token should cost the guesser time.
+    {
+      "name": "SETUP_LIMITER",
+      "namespace_id": "1006",
+      "simple": {
+        "limit": 10,
+        "period": 60
+      }
     }
   ],
   "triggers": {

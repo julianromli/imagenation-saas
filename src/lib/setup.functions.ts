@@ -8,6 +8,7 @@ import { users } from "@/db/schema";
 import { seedDatabase } from "@/db/seed";
 import { getAuth } from "@/lib/auth";
 import { createAccessToken, hashToken } from "@/lib/ids";
+import { consumeRateLimit } from "@/lib/rate-limit";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 import {
   claimSetup,
@@ -46,6 +47,11 @@ export const getSetupStatus = createServerFn({ method: "GET" }).handler(
 export const runSetup = createServerFn({ method: "POST" })
   .validator((data: unknown) => setupSchema.parse(data))
   .handler(async ({ data }) => {
+    // Consumed before the token is read, so a guess costs an attempt whatever
+    // the outcome. Setup belongs to the store, not to a caller, so the key is
+    // a constant.
+    await consumeRateLimit("SETUP_LIMITER", "setup");
+
     const expectedToken = getRuntimeEnv().SETUP_TOKEN;
 
     if (!expectedToken) {

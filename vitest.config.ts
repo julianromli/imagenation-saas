@@ -39,6 +39,11 @@ export default defineConfig({
                   resolve(import.meta.dirname, "drizzle")
                 ),
               },
+              // Pinned, and kept in step with wrangler.jsonc. Left unset, the
+              // pool defaults to today's date, which the installed workerd
+              // stops supporting the moment the calendar passes it.
+              compatibilityDate: "2026-08-05",
+              compatibilityFlags: ["nodejs_compat"],
               d1Databases: ["DB"],
             },
           })),

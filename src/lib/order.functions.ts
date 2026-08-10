@@ -13,6 +13,7 @@ import {
   products,
 } from "@/db/schema";
 import { getSession } from "@/lib/auth.functions";
+import { InvalidRequestError } from "@/lib/errors";
 import {
   createAccessToken,
   createId,
@@ -212,43 +213,64 @@ async function describeStockShortfall(
     : "One or more products do not have enough stock";
 }
 
+/**
+ * Checks the key a caller supplied before it becomes a primary key.
+ *
+ * The value is stored and echoed in errors, so it is bounded and restricted to
+ * printable characters here rather than trusted as it arrives.
+ */
+function requireIdempotencyKey(rawKey: string | null | undefined) {
+  const idempotencyKey = rawKey?.trim();
+
+  if (!idempotencyKey) {
+    throw new InvalidRequestError(
+      "Checkout requires an Idempotency-Key header"
+    );
+  }
+
+  if (
+    idempotencyKey.length > MAX_IDEMPOTENCY_KEY_LENGTH ||
+    !PRINTABLE_ASCII.test(idempotencyKey)
+  ) {
+    throw new InvalidRequestError("That Idempotency-Key is not a valid value");
+  }
+
+  return idempotencyKey;
+}
+
 export const createOrder = createServerFn({ method: "POST" })
   .validator((data: unknown) => checkoutSchema.parse(data))
-  .handler(async ({ data }) => {
+  .handler(({ data }) => {
     const request = getRequest();
-    const idempotencyKey = request.headers.get("Idempotency-Key")?.trim();
-
-    if (!idempotencyKey) {
-      throw new Error("Checkout requires an Idempotency-Key header");
-    }
-
-    if (
-      idempotencyKey.length > MAX_IDEMPOTENCY_KEY_LENGTH ||
-      !PRINTABLE_ASCII.test(idempotencyKey)
-    ) {
-      throw new Error("That Idempotency-Key is not a valid value");
-    }
-
-    // Checkout writes rows and calls a paid provider API, so it is rate limited
-    // like every other public write path. The email is the key, because a guest
-    // checkout has no session to key on.
-    await consumeRateLimit(
-      "CHECKOUT_LIMITER",
-      `checkout:${data.email.trim().toLowerCase()}`
-    );
 
     return createOrderForCheckout(
       data,
-      idempotencyKey,
+      request.headers.get("Idempotency-Key"),
       new URL(request.url).origin
     );
   });
 
+/**
+ * The one checkout path. Both the server function and `/api/checkout` reach the
+ * store through here, so the key check and the rate limit live in this function
+ * rather than in each caller. A guard a caller can skip by choosing the other
+ * entry point is not a guard.
+ */
 export async function createOrderForCheckout(
   data: CheckoutInput,
-  idempotencyKey: string,
+  rawIdempotencyKey: string | null | undefined,
   origin: string
 ) {
+  const idempotencyKey = requireIdempotencyKey(rawIdempotencyKey);
+
+  // Checkout writes rows and calls a paid provider API, so it is rate limited
+  // like every other public write path. The email is the key, because a guest
+  // checkout has no session to key on.
+  await consumeRateLimit(
+    "CHECKOUT_LIMITER",
+    `checkout:${data.email.trim().toLowerCase()}`
+  );
+
   const fingerprint = await checkoutFingerprint(data);
   const replayed = await replayCheckout(idempotencyKey, fingerprint, origin);
 
