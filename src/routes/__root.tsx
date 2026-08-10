@@ -1,15 +1,23 @@
 import { TanStackDevtools } from "@tanstack/react-devtools";
-import { createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import {
+  createRootRoute,
+  HeadContent,
+  Outlet,
+  Scripts,
+} from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 
 import { CartProvider } from "@/components/cart-provider";
+import { SetupGuideButton } from "@/components/setup-guide-button";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
+import { getSetupStatus } from "@/lib/setup.functions";
 
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
+  component: RootComponent,
   errorComponent: ({ error, reset }) => (
     <main className="mx-auto max-w-xl px-5 pt-20 pb-32 sm:px-8">
       <p className="text-destructive text-sm">Unable to load</p>
@@ -51,6 +59,23 @@ export const Route = createRootRoute({
       },
     ],
   }),
+  /**
+   * Only the one boolean the guide needs. `getSetupStatus` also reports whether
+   * `SETUP_TOKEN` is configured, and that answer belongs to the setup page, not
+   * to the SSR payload of every page in the store.
+   */
+  loader: async () => {
+    try {
+      const { complete } = await getSetupStatus();
+
+      return { setupComplete: complete };
+    } catch {
+      // This loader now runs in front of every page. The guide is an
+      // onboarding nicety and the storefront is the business, so a status read
+      // that fails hides the button rather than taking the shop down with it.
+      return { setupComplete: true };
+    }
+  },
   notFoundComponent: () => (
     <main className="mx-auto max-w-xl px-5 pt-20 pb-32 sm:px-8">
       <p className="text-muted-foreground text-sm">404</p>
@@ -72,6 +97,17 @@ export const Route = createRootRoute({
   ),
   shellComponent: RootDocument,
 });
+
+function RootComponent() {
+  const { setupComplete } = Route.useLoaderData();
+
+  return (
+    <>
+      <Outlet />
+      {setupComplete ? null : <SetupGuideButton />}
+    </>
+  );
+}
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (

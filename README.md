@@ -62,6 +62,12 @@ Keep `MAYAR_ENVIRONMENT=sandbox` until you have completed a test checkout.
 
 ## After the first deploy
 
+A floating **?** button sits in the bottom-left corner of every page while
+setup is unfinished, and opens this same checklist in a sheet. It disappears
+for good once `/setup` completes, so a shopper never sees it. The steps live in
+[`src/lib/setup-guide.ts`](src/lib/setup-guide.ts) — edit that file and this
+section together, or they drift.
+
 1. Complete `/setup`.
 2. Register the Mayar webhook URL that the setup page shows. This is optional;
    see [Payment lifecycle](#payment-lifecycle).

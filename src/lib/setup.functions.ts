@@ -26,8 +26,23 @@ const setupSchema = z.object({
   token: z.string().min(1),
 });
 
+/**
+ * Held for the life of the isolate once it is true.
+ *
+ * Setup completion is a one-way door, which is what makes the cache safe. A
+ * `false` is never held: an isolate that read one before setup finished would
+ * otherwise keep offering the setup guide for as long as it lived.
+ */
+let setupCompleted = false;
+
 async function isSetupComplete() {
-  return (await readSetupValue(SETUP_COMPLETED_KEY)) !== null;
+  if (setupCompleted) {
+    return true;
+  }
+
+  setupCompleted = (await readSetupValue(SETUP_COMPLETED_KEY)) !== null;
+
+  return setupCompleted;
 }
 
 export const getSetupStatus = createServerFn({ method: "GET" }).handler(
