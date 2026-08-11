@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { ArrowUpRight, Menu, Sparkles, UserRound } from "lucide-react";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Sheet,
   SheetContent,
@@ -11,6 +11,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { cn } from "@/lib/utils";
 
 const primaryNavItems = [
   { label: "Create", to: "/" },
@@ -58,10 +59,12 @@ export function SiteHeader({ balance, signedIn }: SiteHeaderProps) {
 
         <div className="flex items-center gap-1.5 lg:justify-self-end">
           {signedIn ? (
-            <Button
-              className="min-h-9 rounded-full"
-              render={<Link to="/credits" />}
-              variant="outline"
+            <Link
+              className={cn(
+                buttonVariants({ variant: "outline" }),
+                "min-h-9 rounded-full"
+              )}
+              to="/credits"
             >
               <Sparkles aria-hidden="true" data-icon="inline-start" />
               <span className="tabular-nums bump-in" key={balance}>
@@ -70,24 +73,25 @@ export function SiteHeader({ balance, signedIn }: SiteHeaderProps) {
               <span className="text-muted-foreground">
                 {balance === 1 ? "credit" : "credits"}
               </span>
-            </Button>
+            </Link>
           ) : (
-            <Button
-              className="min-h-9 rounded-full px-4"
-              render={<Link to="/auth" />}
+            <Link
+              className={cn(buttonVariants(), "min-h-9 rounded-full px-4")}
+              to="/auth"
             >
               Sign in
-            </Button>
+            </Link>
           )}
-          <Button
+          <Link
             aria-label="Open account"
-            className="hidden size-10 rounded-full text-muted-foreground hover:text-foreground sm:inline-flex"
-            render={<Link to="/account" />}
-            size="icon"
-            variant="ghost"
+            className={cn(
+              buttonVariants({ size: "icon", variant: "ghost" }),
+              "hidden size-10 rounded-full text-muted-foreground hover:text-foreground sm:inline-flex"
+            )}
+            to="/account"
           >
             <UserRound aria-hidden="true" />
-          </Button>
+          </Link>
           <Sheet onOpenChange={setMobileMenuOpen} open={mobileMenuOpen}>
             <SheetTrigger
               render={
@@ -133,14 +137,17 @@ export function SiteHeader({ balance, signedIn }: SiteHeaderProps) {
                 </nav>
 
                 <div className="mt-8 grid gap-2">
-                  <Button
-                    className="min-h-12 w-full justify-between rounded-full px-5"
+                  <Link
+                    className={cn(
+                      buttonVariants(),
+                      "min-h-12 w-full justify-between rounded-full px-5"
+                    )}
                     onClick={() => setMobileMenuOpen(false)}
-                    render={<Link to={signedIn ? "/account" : "/auth"} />}
+                    to={signedIn ? "/account" : "/auth"}
                   >
                     {signedIn ? "Account" : "Sign in"}
                     <UserRound aria-hidden="true" />
-                  </Button>
+                  </Link>
                 </div>
 
                 <p className="mt-auto pt-10 text-muted-foreground text-xs uppercase tracking-[0.16em]">

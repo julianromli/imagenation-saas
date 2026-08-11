@@ -87,7 +87,7 @@ export type SharedGenerationView = {
 };
 
 export const getSharedGeneration = createServerFn({ method: "GET" })
-  .inputValidator((token: string) => token)
+  .validator((token: string) => token)
   .handler(async ({ data: token }): Promise<SharedGenerationView | null> => {
     const row = await getDb().query.generations.findFirst({
       where: and(
@@ -118,7 +118,7 @@ export const getSharedGeneration = createServerFn({ method: "GET" })
  * See ADR-0020.
  */
 export const setGenerationShare = createServerFn({ method: "POST" })
-  .inputValidator(shareSchema)
+  .validator(shareSchema)
   .handler(async ({ data }) => {
     const userId = await requireUserId();
     const row = await getDb().query.generations.findFirst({

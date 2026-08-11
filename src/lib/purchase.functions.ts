@@ -68,7 +68,7 @@ export const getSavedMobile = createServerFn({ method: "GET" }).handler(
  * second click has to land on the first invoice, not on a refusal.
  */
 export const startPurchase = createServerFn({ method: "POST" })
-  .inputValidator(startPurchaseSchema)
+  .validator(startPurchaseSchema)
   .handler(async ({ data }) => {
     const user = await requireUser();
 
@@ -211,7 +211,7 @@ export async function reconcilePurchase(purchaseId: string) {
 }
 
 export const refreshPurchase = createServerFn({ method: "POST" })
-  .inputValidator((id: string) => id)
+  .validator((id: string) => id)
   .handler(async ({ data: id }) => {
     const user = await requireUser();
 

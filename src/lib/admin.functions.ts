@@ -111,7 +111,7 @@ export const listAccounts = createServerFn({ method: "GET" }).handler(
  * every decision an operator made stays visible. See ADR-0016.
  */
 export const adjustAccountCredits = createServerFn({ method: "POST" })
-  .inputValidator(creditAdjustmentSchema)
+  .validator(creditAdjustmentSchema)
   .handler(async ({ data }) => {
     await ensureAdmin();
     await adjustCredits({
@@ -150,7 +150,7 @@ export const listAllPurchases = createServerFn({ method: "GET" }).handler(
 
 /** Re-reads one purchase from Mayar. The same settlement path as the webhook. */
 export const recheckPurchase = createServerFn({ method: "POST" })
-  .inputValidator((id: string) => id)
+  .validator((id: string) => id)
   .handler(async ({ data: id }) => {
     await ensureAdmin();
 

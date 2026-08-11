@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import type { SharedGenerationView } from "@/lib/generation.functions";
 import { getSharedGeneration } from "@/lib/generation.functions";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/s/$token")({
   component: SharedImagePage,
@@ -39,12 +40,12 @@ function SharedImagePage() {
         <p className="mt-4 text-muted-foreground">
           The image was never shared, or its owner turned sharing off.
         </p>
-        <Button
-          className="mt-8 min-h-11 rounded-full px-5"
-          render={<Link to="/" />}
+        <Link
+          className={cn(buttonVariants(), "mt-8 min-h-11 rounded-full px-5")}
+          to="/"
         >
           Make your own
-        </Button>
+        </Link>
       </main>
     );
   }
@@ -75,12 +76,12 @@ function SharedImagePage() {
           Describe what you want and get an image back. New accounts start with
           free credits.
         </p>
-        <Button
-          className="mt-5 min-h-11 rounded-full px-5"
-          render={<Link to="/" />}
+        <Link
+          className={cn(buttonVariants(), "mt-5 min-h-11 rounded-full px-5")}
+          to="/"
         >
           Try it
-        </Button>
+        </Link>
       </div>
     </main>
   );

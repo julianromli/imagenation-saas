@@ -6,9 +6,10 @@ import {
   useRouter,
 } from "@tanstack/react-router";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { getSession } from "@/lib/auth.functions";
 import { authClient } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
 
 const rootApi = getRouteApi("__root__");
 
@@ -36,12 +37,12 @@ function AccountPage() {
           Your images, your credits, and your purchases live behind your
           account.
         </p>
-        <Button
-          className="mt-8 min-h-11 rounded-full px-5"
-          render={<Link to="/auth" />}
+        <Link
+          className={cn(buttonVariants(), "mt-8 min-h-11 rounded-full px-5")}
+          to="/auth"
         >
           Sign in
-        </Button>
+        </Link>
       </main>
     );
   }

@@ -2,7 +2,7 @@ import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { Check, Copy, Link2, Link2Off } from "lucide-react";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Empty,
   EmptyContent,
@@ -19,6 +19,7 @@ import {
 } from "@/lib/generation.functions";
 import { shareUrl } from "@/lib/images";
 import { IMAGE_RETENTION_DAYS } from "@/lib/pricing";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/history")({
   component: HistoryPage,
@@ -37,12 +38,12 @@ function HistoryPage() {
         <h1 className="font-heading font-medium text-4xl tracking-[-0.05em]">
           Sign in to see your images.
         </h1>
-        <Button
-          className="mt-6 min-h-11 rounded-full px-5"
-          render={<Link to="/auth" />}
+        <Link
+          className={cn(buttonVariants(), "mt-6 min-h-11 rounded-full px-5")}
+          to="/auth"
         >
           Sign in
-        </Button>
+        </Link>
       </main>
     );
   }
@@ -66,12 +67,12 @@ function HistoryPage() {
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button
-              className="min-h-11 rounded-full px-5"
-              render={<Link to="/" />}
+            <Link
+              className={cn(buttonVariants(), "min-h-11 rounded-full px-5")}
+              to="/"
             >
               Make one
-            </Button>
+            </Link>
           </EmptyContent>
         </Empty>
       ) : (

@@ -6,7 +6,7 @@ import {
 } from "@tanstack/react-router";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Field,
   FieldDescription,
@@ -25,6 +25,7 @@ import {
   refreshPurchase,
   startPurchase,
 } from "@/lib/purchase.functions";
+import { cn } from "@/lib/utils";
 
 const rootApi = getRouteApi("__root__");
 
@@ -235,13 +236,15 @@ function PackList({ savedMobile, signedIn }: PackListProps) {
                 Buy
               </Button>
             ) : (
-              <Button
-                className="mt-6 min-h-11 rounded-full"
-                render={<Link to="/auth" />}
-                variant="outline"
+              <Link
+                className={cn(
+                  buttonVariants({ variant: "outline" }),
+                  "mt-6 min-h-11 rounded-full"
+                )}
+                to="/auth"
               >
                 Sign in
-              </Button>
+              </Link>
             )}
           </li>
         ))}

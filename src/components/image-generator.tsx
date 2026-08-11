@@ -2,7 +2,7 @@ import { Link, useRouter } from "@tanstack/react-router";
 import { ImagePlus, RotateCcw, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Empty,
   EmptyDescription,
@@ -399,12 +399,15 @@ export function ImageGenerator({
                   )}
                 </Button>
               ) : (
-                <Button
-                  className="min-h-11 flex-1 rounded-full px-5"
-                  render={<Link to="/auth" />}
+                <Link
+                  className={cn(
+                    buttonVariants(),
+                    "min-h-11 flex-1 rounded-full px-5"
+                  )}
+                  to="/auth"
                 >
                   Sign in to generate
-                </Button>
+                </Link>
               )}
               <Button
                 aria-label="Clear the prompt"
