@@ -289,7 +289,7 @@ export function ImageGenerator({
             </FieldLabel>
             <div className="flex flex-wrap gap-2">
               {references.map((reference) => (
-                <span className="relative" key={reference.objectKey}>
+                <span className="relative bump-in" key={reference.objectKey}>
                   <img
                     alt=""
                     className="size-16 rounded-xl object-cover ring-1 ring-border"
@@ -498,6 +498,15 @@ function ResultPane({
   result: GenerationView | null;
   tierSeconds: number;
 }) {
+  // The entrance plays on load, not on mount. A freshly generated image is a
+  // cold fetch, so animating on mount would run the whole 350ms over an empty
+  // box and the image would still pop in at the end.
+  //
+  // The id is stored rather than a boolean: comparing it to the current result
+  // re-arms the entrance on the same render that switches image, so no frame
+  // is ever painted carrying the previous image's animation.
+  const [loadedId, setLoadedId] = useState<string | null>(null);
+
   if (pending) {
     return (
       <Empty className="min-h-72 border border-border border-dashed">
@@ -552,10 +561,17 @@ function ResultPane({
 
   return (
     <figure className="flex flex-1 flex-col gap-3">
+      {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: onLoad is a resource event, not a user interaction. */}
       <img
         alt={result.prompt.slice(0, 120)}
-        className="w-full rounded-3xl bg-muted object-contain ring-1 ring-border"
+        className={cn(
+          "w-full rounded-3xl bg-muted object-contain ring-1 ring-border",
+          loadedId === result.id && "rise-in-plain"
+        )}
+        key={result.id}
+        onLoad={() => setLoadedId(result.id)}
         src={result.imageUrl}
+        style={{ aspectRatio: result.aspectRatio.replace(":", " / ") }}
       />
       <figcaption className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
         <span>{result.resolution}</span>

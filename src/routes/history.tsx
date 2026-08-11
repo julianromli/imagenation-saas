@@ -159,7 +159,7 @@ function HistoryCard({ generation }: { generation: GenerationView }) {
       </p>
 
       {generation.status === "succeeded" && generation.imageUrl ? (
-        <div className="mt-auto grid gap-3 border-border/70 border-t pt-3">
+        <div className="mt-auto grid border-border/70 border-t pt-3">
           <div className="flex items-center justify-between gap-3">
             <span className="flex items-center gap-2 text-sm">
               {shareToken ? (
@@ -182,36 +182,42 @@ function HistoryCard({ generation }: { generation: GenerationView }) {
             />
           </div>
 
-          {shareToken ? (
-            <>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-muted-foreground text-sm">
-                  Show the prompt
-                </span>
-                <Switch
-                  aria-label="Show the prompt on the shared page"
-                  checked={promptVisible}
-                  disabled={busy}
-                  onCheckedChange={(checked) =>
-                    updateShare(true, checked === true)
-                  }
-                />
+          <div
+            className="disclosure"
+            data-open={Boolean(shareToken)}
+            inert={!shareToken}
+          >
+            <div>
+              <div className="grid gap-3 pt-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground text-sm">
+                    Show the prompt
+                  </span>
+                  <Switch
+                    aria-label="Show the prompt on the shared page"
+                    checked={promptVisible}
+                    disabled={busy}
+                    onCheckedChange={(checked) =>
+                      updateShare(true, checked === true)
+                    }
+                  />
+                </div>
+                <Button
+                  className="min-h-10 rounded-full"
+                  onClick={copyLink}
+                  type="button"
+                  variant="outline"
+                >
+                  {copied ? (
+                    <Check aria-hidden="true" data-icon="inline-start" />
+                  ) : (
+                    <Copy aria-hidden="true" data-icon="inline-start" />
+                  )}
+                  {copied ? "Copied" : "Copy link"}
+                </Button>
               </div>
-              <Button
-                className="min-h-10 rounded-full"
-                onClick={copyLink}
-                type="button"
-                variant="outline"
-              >
-                {copied ? (
-                  <Check aria-hidden="true" data-icon="inline-start" />
-                ) : (
-                  <Copy aria-hidden="true" data-icon="inline-start" />
-                )}
-                {copied ? "Copied" : "Copy link"}
-              </Button>
-            </>
-          ) : null}
+            </div>
+          </div>
         </div>
       ) : null}
     </li>

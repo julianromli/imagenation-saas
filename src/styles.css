@@ -163,6 +163,19 @@
   .rise-in-children > *:nth-child(4) { animation-delay: 270ms; }
   .rise-in-children > *:nth-child(n + 5) { animation-delay: 360ms; }
 
+  /* Same entrance as .rise-in without the blur. For large surfaces (images,
+     full panels) where animating a filter would repaint too much area. */
+  @keyframes rise-in-plain {
+    from {
+      opacity: 0;
+      translate: 0 8px;
+    }
+  }
+
+  .rise-in-plain {
+    animation: rise-in-plain 350ms var(--curve-out-quint) backwards;
+  }
+
   /* A derived value settling on its new number. */
   @keyframes bump-in {
     from {
@@ -185,6 +198,45 @@
   .badge-pop {
     animation: badge-pop 320ms var(--curve-out-quint);
   }
+
+  /* Expanding disclosure. The child is clipped, so the row height carries the
+     reveal. Mark up as:
+       <div class="disclosure" data-open={bool} inert={!bool}>
+         <div>…content…</div>
+       </div>
+     The content stays mounted in both states — a transition needs two states
+     to interpolate between. `inert` keeps the closed content out of the tab
+     order and the accessibility tree.
+
+     This animates grid-template-rows, which is a layout property. That is a
+     deliberate exception to the transform/opacity rule: it runs for 200ms, on
+     user action, on one element at a time. Do not reach for it inside a list
+     that expands many rows at once. */
+  .disclosure {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition:
+      grid-template-rows 200ms var(--curve-out-strong),
+      opacity 150ms var(--curve-out-quint);
+  }
+
+  .disclosure > * {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .disclosure[data-open="true"] {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+
+  /* A fade with no movement. Used by the reduced-motion block below. */
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
 }
 
 /* Reduced motion. Deliberately unlayered: unlayered declarations outrank
@@ -200,5 +252,23 @@
     animation-iteration-count: 1;
     transition-delay: 0s;
     transition-duration: 1ms;
+  }
+}
+
+/* The blanket clamp above is correct as a default, but a few motions exist
+   specifically to prevent a jarring change. For those, drop the movement and
+   keep a short fade rather than removing the bridge entirely. Class selectors
+   outrank the `*` above, so these win regardless of source order. */
+@media (prefers-reduced-motion: reduce) {
+  .rise-in,
+  .rise-in-plain,
+  .bump-in {
+    animation-duration: 120ms;
+    animation-name: fade-in;
+  }
+
+  .disclosure {
+    transition-duration: 120ms;
+    transition-property: opacity;
   }
 }

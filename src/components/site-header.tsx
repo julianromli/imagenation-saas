@@ -64,7 +64,9 @@ export function SiteHeader({ balance, signedIn }: SiteHeaderProps) {
               variant="outline"
             >
               <Sparkles aria-hidden="true" data-icon="inline-start" />
-              <span className="tabular-nums">{balance}</span>
+              <span className="tabular-nums bump-in" key={balance}>
+                {balance}
+              </span>
               <span className="text-muted-foreground">
                 {balance === 1 ? "credit" : "credits"}
               </span>

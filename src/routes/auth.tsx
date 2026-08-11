@@ -130,12 +130,32 @@ function AuthPage() {
 
       <form className="mt-8" onSubmit={submit}>
         <FieldGroup>
-          {mode === "sign-up" ? (
-            <Field>
-              <FieldLabel htmlFor="auth-name">Name</FieldLabel>
-              <Input autoComplete="name" id="auth-name" name="name" required />
-            </Field>
-          ) : null}
+          {/* Stays mounted in both modes: a transition needs two states to
+              interpolate between. The -mb-6 cancels FieldGroup's gap-6, which
+              a zero-height child would otherwise still claim; the pb-6 inside
+              re-creates it so the gap collapses with the field. */}
+          <div
+            className="-mb-6 disclosure"
+            data-open={mode === "sign-up"}
+            inert={mode !== "sign-up"}
+          >
+            <div>
+              <div className="pb-6">
+                <Field>
+                  <FieldLabel htmlFor="auth-name">Name</FieldLabel>
+                  <Input
+                    autoComplete="name"
+                    id="auth-name"
+                    name="name"
+                    // `inert` hides the field but does not exempt it from
+                    // constraint validation, so an unconditional `required`
+                    // would block the sign-in form from ever submitting.
+                    required={mode === "sign-up"}
+                  />
+                </Field>
+              </div>
+            </div>
+          </div>
           <Field>
             <FieldLabel htmlFor="auth-email">Email address</FieldLabel>
             <Input
