@@ -6,12 +6,18 @@ import {
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { authClient } from "@/lib/auth-client";
 import { SIGNUP_GRANT_CREDITS } from "@/lib/pricing";
-import { cn } from "@/lib/utils";
 
 type Mode = "sign-in" | "sign-up";
 
@@ -23,15 +29,18 @@ export const Route = createFileRoute("/auth")({
 });
 
 /**
- * One page, two tabs.
+ * One page, two modes.
  *
  * The tempting alternative is to ask for the email first and then decide which
  * form to show. That needs an endpoint answering "does this account exist",
- * which is an oracle anybody can query against any address. A tab costs one
+ * which is an oracle anybody can query against any address. A switch costs one
  * click and leaks nothing.
  *
- * Sign-up is the default tab: with no landing page in front of it, a visitor
+ * Sign-up is the default mode: with no landing page in front of it, a visitor
  * reaching this page is far more likely to be new than returning.
+ *
+ * The switch is a toggle group rather than tabs, because the form below is one
+ * shared form, not two panels. Switching keeps whatever is already typed.
  */
 function AuthPage() {
   const navigate = useNavigate();
@@ -89,83 +98,82 @@ function AuthPage() {
           : "Sign in to pick up where you left off."}
       </p>
 
-      <div
+      <ToggleGroup
         aria-label="Sign in or create an account"
-        className="mt-8 grid grid-cols-2 gap-1 rounded-full border border-border/70 bg-muted/40 p-1 text-sm"
-        role="tablist"
+        className="mt-8 grid w-full grid-cols-2 rounded-full border border-border/70 bg-muted/40 p-1"
+        onValueChange={(value: string[]) => {
+          const [next] = value;
+
+          // An empty group means the active item was clicked again. The mode
+          // has to stay on something, so that click is ignored.
+          if (next === "sign-in" || next === "sign-up") {
+            setMode(next);
+            setError("");
+          }
+        }}
+        spacing={1}
+        value={[mode]}
       >
-        {(["sign-up", "sign-in"] as const).map((value) => (
-          <button
-            aria-selected={mode === value}
-            className={cn(
-              "min-h-10 rounded-full transition-[background-color,color,transform] duration-150 ease-out-quint active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-              mode === value
-                ? "bg-foreground text-background"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-            key={value}
-            onClick={() => {
-              setMode(value);
-              setError("");
-            }}
-            role="tab"
-            type="button"
-          >
-            {value === "sign-up" ? "Create account" : "Sign in"}
-          </button>
-        ))}
-      </div>
-
-      <form className="mt-8 grid gap-5" onSubmit={submit}>
-        {mode === "sign-up" ? (
-          <div className="grid gap-2">
-            <Label htmlFor="auth-name">Name</Label>
-            <Input autoComplete="name" id="auth-name" name="name" required />
-          </div>
-        ) : null}
-        <div className="grid gap-2">
-          <Label htmlFor="auth-email">Email address</Label>
-          <Input
-            autoComplete="email"
-            id="auth-email"
-            name="email"
-            required
-            type="email"
-          />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="auth-password">Password</Label>
-          <Input
-            autoComplete={
-              mode === "sign-up" ? "new-password" : "current-password"
-            }
-            id="auth-password"
-            minLength={8}
-            name="password"
-            required
-            type="password"
-          />
-          {mode === "sign-up" ? (
-            <p className="text-muted-foreground text-xs">
-              At least 8 characters.
-            </p>
-          ) : null}
-        </div>
-
-        {error ? (
-          <p className="text-destructive text-sm" role="alert">
-            {error}
-          </p>
-        ) : null}
-
-        <Button
-          className="min-h-11 rounded-full"
-          disabled={submitting}
-          type="submit"
+        <ToggleGroupItem
+          className="min-h-10 rounded-full text-muted-foreground aria-pressed:bg-foreground aria-pressed:text-background"
+          value="sign-up"
         >
-          {submitting ? <Spinner className="size-4" /> : null}
-          {mode === "sign-up" ? "Create account" : "Sign in"}
-        </Button>
+          Create account
+        </ToggleGroupItem>
+        <ToggleGroupItem
+          className="min-h-10 rounded-full text-muted-foreground aria-pressed:bg-foreground aria-pressed:text-background"
+          value="sign-in"
+        >
+          Sign in
+        </ToggleGroupItem>
+      </ToggleGroup>
+
+      <form className="mt-8" onSubmit={submit}>
+        <FieldGroup>
+          {mode === "sign-up" ? (
+            <Field>
+              <FieldLabel htmlFor="auth-name">Name</FieldLabel>
+              <Input autoComplete="name" id="auth-name" name="name" required />
+            </Field>
+          ) : null}
+          <Field>
+            <FieldLabel htmlFor="auth-email">Email address</FieldLabel>
+            <Input
+              autoComplete="email"
+              id="auth-email"
+              name="email"
+              required
+              type="email"
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="auth-password">Password</FieldLabel>
+            <Input
+              autoComplete={
+                mode === "sign-up" ? "new-password" : "current-password"
+              }
+              id="auth-password"
+              minLength={8}
+              name="password"
+              required
+              type="password"
+            />
+            {mode === "sign-up" ? (
+              <FieldDescription>At least 8 characters.</FieldDescription>
+            ) : null}
+          </Field>
+
+          <FieldError>{error}</FieldError>
+
+          <Button
+            className="min-h-11 rounded-full"
+            disabled={submitting}
+            type="submit"
+          >
+            {submitting ? <Spinner data-icon="inline-start" /> : null}
+            {mode === "sign-up" ? "Create account" : "Sign in"}
+          </Button>
+        </FieldGroup>
       </form>
     </main>
   );

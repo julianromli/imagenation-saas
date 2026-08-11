@@ -36,12 +36,12 @@ function AccountPage() {
           Your images, your credits, and your purchases live behind your
           account.
         </p>
-        <Link
-          className="mt-8 inline-flex min-h-11 items-center rounded-full bg-foreground px-5 text-background text-sm"
-          to="/auth"
+        <Button
+          className="mt-8 min-h-11 rounded-full px-5"
+          render={<Link to="/auth" />}
         >
           Sign in
-        </Link>
+        </Button>
       </main>
     );
   }

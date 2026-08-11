@@ -67,7 +67,7 @@ export function SetupGuideButton() {
             </SheetDescription>
           </SheetHeader>
 
-          <ol className="space-y-7 px-6 pb-8">
+          <ol className="flex flex-col gap-7 px-6 pb-8">
             {setupGuideSteps.map((step, index) => (
               <li className="flex gap-4" key={step.title}>
                 <span

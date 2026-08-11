@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { ArrowUpRight, Menu, Sparkles, UserRound } from "lucide-react";
 import { useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import {
   Sheet,
   SheetContent,
@@ -57,37 +58,46 @@ export function SiteHeader({ balance, signedIn }: SiteHeaderProps) {
 
         <div className="flex items-center gap-1.5 lg:justify-self-end">
           {signedIn ? (
-            <Link
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-border px-3 text-sm transition-[background-color,transform] duration-150 ease-out-quint hover:bg-muted active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-              to="/credits"
+            <Button
+              className="min-h-9 rounded-full"
+              render={<Link to="/credits" />}
+              variant="outline"
             >
-              <Sparkles aria-hidden="true" className="size-3.5" />
+              <Sparkles aria-hidden="true" data-icon="inline-start" />
               <span className="tabular-nums">{balance}</span>
               <span className="text-muted-foreground">
                 {balance === 1 ? "credit" : "credits"}
               </span>
-            </Link>
+            </Button>
           ) : (
-            <Link
-              className="inline-flex min-h-9 items-center rounded-full bg-foreground px-4 text-background text-sm transition-[background-color,transform] duration-150 ease-out-quint hover:bg-foreground/85 active:scale-[0.96]"
-              to="/auth"
+            <Button
+              className="min-h-9 rounded-full px-4"
+              render={<Link to="/auth" />}
             >
               Sign in
-            </Link>
+            </Button>
           )}
-          <Link
+          <Button
             aria-label="Open account"
-            className="hidden size-10 items-center justify-center rounded-full text-muted-foreground transition-[background-color,color,transform] duration-150 ease-out-quint hover:bg-muted hover:text-foreground active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:inline-flex"
-            to="/account"
+            className="hidden size-10 rounded-full text-muted-foreground hover:text-foreground sm:inline-flex"
+            render={<Link to="/account" />}
+            size="icon"
+            variant="ghost"
           >
-            <UserRound aria-hidden="true" className="size-4" />
-          </Link>
+            <UserRound aria-hidden="true" />
+          </Button>
           <Sheet onOpenChange={setMobileMenuOpen} open={mobileMenuOpen}>
             <SheetTrigger
-              aria-label="Open navigation menu"
-              className="inline-flex size-10 items-center justify-center rounded-full border border-border transition-[background-color,color,transform] duration-150 ease-out-quint hover:bg-muted active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring lg:hidden"
+              render={
+                <Button
+                  aria-label="Open navigation menu"
+                  className="size-10 rounded-full lg:hidden"
+                  size="icon"
+                  variant="outline"
+                />
+              }
             >
-              <Menu aria-hidden="true" className="size-4" />
+              <Menu aria-hidden="true" />
             </SheetTrigger>
             <SheetContent
               className="w-full max-w-sm gap-0 bg-background p-0"
@@ -121,14 +131,14 @@ export function SiteHeader({ balance, signedIn }: SiteHeaderProps) {
                 </nav>
 
                 <div className="mt-8 grid gap-2">
-                  <Link
-                    className="flex min-h-12 items-center justify-between rounded-full bg-foreground px-5 text-background text-sm transition-[background-color,transform] duration-150 ease-out-quint hover:bg-foreground/80 active:scale-[0.96]"
+                  <Button
+                    className="min-h-12 w-full justify-between rounded-full px-5"
                     onClick={() => setMobileMenuOpen(false)}
-                    to={signedIn ? "/account" : "/auth"}
+                    render={<Link to={signedIn ? "/account" : "/auth"} />}
                   >
                     {signedIn ? "Account" : "Sign in"}
-                    <UserRound aria-hidden="true" className="size-4" />
-                  </Link>
+                    <UserRound aria-hidden="true" />
+                  </Button>
                 </div>
 
                 <p className="mt-auto pt-10 text-muted-foreground text-xs uppercase tracking-[0.16em]">

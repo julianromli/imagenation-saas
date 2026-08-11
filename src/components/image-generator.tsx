@@ -3,7 +3,20 @@ import { ImagePlus, RotateCcw, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import {
   NativeSelect,
   NativeSelectOption,
@@ -243,179 +256,183 @@ export function ImageGenerator({
         aria-label="Image settings"
         className="border-border/70 border-b px-5 py-6 sm:px-8 lg:border-r lg:border-b-0"
       >
-        <div className="grid gap-2">
-          <Label htmlFor="prompt">Prompt</Label>
-          <Textarea
-            className="min-h-44 resize-y text-base"
-            id="prompt"
-            onChange={(event) => setPrompt(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                submit();
-              }
-            }}
-            placeholder="A quiet neighbourhood storefront at blue hour, warm light spilling onto wet pavement."
-            value={prompt}
-          />
-          <p className="text-muted-foreground text-xs">
-            Enter to generate · Shift+Enter for a new line
-          </p>
-        </div>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="prompt">Prompt</FieldLabel>
+            <Textarea
+              className="min-h-44 resize-y text-base"
+              id="prompt"
+              onChange={(event) => setPrompt(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  submit();
+                }
+              }}
+              placeholder="A quiet neighbourhood storefront at blue hour, warm light spilling onto wet pavement."
+              value={prompt}
+            />
+            <FieldDescription>
+              Enter to generate · Shift+Enter for a new line
+            </FieldDescription>
+          </Field>
 
-        <div className="mt-6 grid gap-2">
-          <div className="flex items-baseline justify-between">
-            <Label htmlFor="references">Reference images</Label>
-            <span className="text-muted-foreground text-xs">
-              Free · up to {MAX_REFERENCE_IMAGES}
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {references.map((reference) => (
-              <span className="relative" key={reference.objectKey}>
-                <img
-                  alt=""
-                  className="size-16 rounded-xl object-cover ring-1 ring-border"
-                  src={reference.previewUrl}
-                />
+          <Field>
+            <FieldLabel
+              className="w-full items-baseline justify-between"
+              htmlFor="references"
+            >
+              Reference images
+              <span className="font-normal text-muted-foreground text-xs">
+                Free · up to {MAX_REFERENCE_IMAGES}
+              </span>
+            </FieldLabel>
+            <div className="flex flex-wrap gap-2">
+              {references.map((reference) => (
+                <span className="relative" key={reference.objectKey}>
+                  <img
+                    alt=""
+                    className="size-16 rounded-xl object-cover ring-1 ring-border"
+                    src={reference.previewUrl}
+                  />
+                  <button
+                    aria-label="Remove reference image"
+                    className="-top-1.5 -right-1.5 absolute inline-flex size-6 items-center justify-center rounded-full bg-foreground text-background transition-transform duration-150 ease-out-quint hover:scale-105 active:scale-95"
+                    onClick={() => removeReference(reference.objectKey)}
+                    type="button"
+                  >
+                    <X aria-hidden="true" className="size-3" />
+                  </button>
+                </span>
+              ))}
+              {references.length < MAX_REFERENCE_IMAGES ? (
                 <button
-                  aria-label="Remove reference image"
-                  className="-top-1.5 -right-1.5 absolute inline-flex size-6 items-center justify-center rounded-full bg-foreground text-background transition-transform duration-150 ease-out-quint hover:scale-105 active:scale-95"
-                  onClick={() => removeReference(reference.objectKey)}
+                  className="inline-flex size-16 flex-col items-center justify-center gap-1 rounded-xl border border-border border-dashed text-muted-foreground text-xs transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  disabled={uploading}
+                  onClick={() => fileInput.current?.click()}
                   type="button"
                 >
-                  <X aria-hidden="true" className="size-3" />
+                  {uploading ? (
+                    <Spinner className="size-4" />
+                  ) : (
+                    <ImagePlus aria-hidden="true" className="size-4" />
+                  )}
+                  Add
                 </button>
-              </span>
-            ))}
-            {references.length < MAX_REFERENCE_IMAGES ? (
-              <button
-                className="inline-flex size-16 flex-col items-center justify-center gap-1 rounded-xl border border-border border-dashed text-muted-foreground text-xs transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                disabled={uploading}
-                onClick={() => fileInput.current?.click()}
-                type="button"
+              ) : null}
+            </div>
+            <input
+              accept="image/png,image/jpeg,image/webp,image/avif"
+              className="sr-only"
+              id="references"
+              multiple
+              onChange={(event) => addReferences(event.target)}
+              ref={fileInput}
+              type="file"
+            />
+            <FieldDescription>
+              PNG, JPEG, WebP or AVIF, up to{" "}
+              {Math.round(MAX_IMAGE_BYTES / (1024 * 1024))}MB each.
+            </FieldDescription>
+          </Field>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="resolution">Resolution</FieldLabel>
+              <NativeSelect
+                id="resolution"
+                onChange={(event) => setResolution(event.target.value)}
+                value={resolution}
               >
-                {uploading ? (
-                  <Spinner className="size-4" />
-                ) : (
-                  <ImagePlus aria-hidden="true" className="size-4" />
-                )}
-                Add
-              </button>
+                {RESOLUTION_TIERS.map((option) => (
+                  <NativeSelectOption key={option.id} value={option.id}>
+                    {option.label} · {option.credits}{" "}
+                    {option.credits === 1 ? "credit" : "credits"}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+              <FieldDescription>
+                {tier.sampleDimensions} at 16:9 · about {tier.typicalSeconds}s
+              </FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="aspect-ratio">Aspect ratio</FieldLabel>
+              <NativeSelect
+                id="aspect-ratio"
+                onChange={(event) => setAspectRatio(event.target.value)}
+                value={aspectRatio}
+              >
+                {ASPECT_RATIOS.map((option) => (
+                  <NativeSelectOption key={option} value={option}>
+                    {option}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </Field>
+          </div>
+
+          <FieldError>{error}</FieldError>
+
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              {signedIn ? (
+                <Button
+                  className="min-h-11 flex-1 rounded-full"
+                  disabled={pending || !prompt.trim() || !affordable}
+                  onClick={submit}
+                  type="button"
+                >
+                  {pending ? (
+                    <>
+                      <Spinner data-icon="inline-start" />
+                      Generating
+                    </>
+                  ) : (
+                    <>
+                      Generate
+                      <span aria-hidden="true" className="opacity-60">
+                        ·
+                      </span>
+                      <span className="tabular-nums">{cost}</span>
+                      {cost === 1 ? "credit" : "credits"}
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <Button
+                  className="min-h-11 flex-1 rounded-full px-5"
+                  render={<Link to="/auth" />}
+                >
+                  Sign in to generate
+                </Button>
+              )}
+              <Button
+                aria-label="Clear the prompt"
+                className="size-11 rounded-full"
+                disabled={pending}
+                onClick={() => {
+                  setPrompt("");
+                  setError(null);
+                }}
+                size="icon"
+                type="button"
+                variant="ghost"
+              >
+                <RotateCcw aria-hidden="true" />
+              </Button>
+            </div>
+
+            {signedIn && !affordable ? (
+              <p className="text-muted-foreground text-sm">
+                This costs {cost} credits and you have {balance}.{" "}
+                <Link className="underline underline-offset-4" to="/credits">
+                  Top up
+                </Link>
+                .
+              </p>
             ) : null}
           </div>
-          <input
-            accept="image/png,image/jpeg,image/webp,image/avif"
-            className="sr-only"
-            id="references"
-            multiple
-            onChange={(event) => addReferences(event.target)}
-            ref={fileInput}
-            type="file"
-          />
-          <p className="text-muted-foreground text-xs">
-            PNG, JPEG, WebP or AVIF, up to{" "}
-            {Math.round(MAX_IMAGE_BYTES / (1024 * 1024))}MB each.
-          </p>
-        </div>
-
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          <div className="grid gap-2">
-            <Label htmlFor="resolution">Resolution</Label>
-            <NativeSelect
-              id="resolution"
-              onChange={(event) => setResolution(event.target.value)}
-              value={resolution}
-            >
-              {RESOLUTION_TIERS.map((option) => (
-                <NativeSelectOption key={option.id} value={option.id}>
-                  {option.label} · {option.credits}{" "}
-                  {option.credits === 1 ? "credit" : "credits"}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-            <p className="text-muted-foreground text-xs">
-              {tier.sampleDimensions} at 16:9 · about {tier.typicalSeconds}s
-            </p>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="aspect-ratio">Aspect ratio</Label>
-            <NativeSelect
-              id="aspect-ratio"
-              onChange={(event) => setAspectRatio(event.target.value)}
-              value={aspectRatio}
-            >
-              {ASPECT_RATIOS.map((option) => (
-                <NativeSelectOption key={option} value={option}>
-                  {option}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </div>
-        </div>
-
-        {error ? (
-          <p className="mt-6 text-destructive text-sm" role="alert">
-            {error}
-          </p>
-        ) : null}
-
-        <div className="mt-6 flex items-center gap-3">
-          {signedIn ? (
-            <Button
-              className="min-h-11 flex-1 rounded-full"
-              disabled={pending || !prompt.trim() || !affordable}
-              onClick={submit}
-              type="button"
-            >
-              {pending ? (
-                <>
-                  <Spinner className="size-4" />
-                  Generating
-                </>
-              ) : (
-                <>
-                  Generate
-                  <span aria-hidden="true" className="opacity-60">
-                    ·
-                  </span>
-                  <span className="tabular-nums">{cost}</span>
-                  {cost === 1 ? "credit" : "credits"}
-                </>
-              )}
-            </Button>
-          ) : (
-            <Link
-              className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full bg-foreground px-5 text-background text-sm transition-[background-color,transform] duration-150 ease-out-quint hover:bg-foreground/85 active:scale-[0.96]"
-              to="/auth"
-            >
-              Sign in to generate
-            </Link>
-          )}
-          <Button
-            aria-label="Clear the prompt"
-            className="size-11 rounded-full"
-            disabled={pending}
-            onClick={() => {
-              setPrompt("");
-              setError(null);
-            }}
-            type="button"
-            variant="ghost"
-          >
-            <RotateCcw aria-hidden="true" className="size-4" />
-          </Button>
-        </div>
-
-        {signedIn && !affordable ? (
-          <p className="mt-3 text-muted-foreground text-sm">
-            This costs {cost} credits and you have {balance}.{" "}
-            <Link className="underline underline-offset-4" to="/credits">
-              Top up
-            </Link>
-            .
-          </p>
-        ) : null}
+        </FieldGroup>
       </section>
 
       <section
@@ -483,47 +500,53 @@ function ResultPane({
 }) {
   if (pending) {
     return (
-      <div className="flex min-h-72 flex-1 flex-col items-center justify-center gap-3 rounded-3xl border border-border border-dashed">
-        <Spinner className="size-5" />
-        <p className="text-muted-foreground text-sm">
-          Making your image · about {tierSeconds}s
-        </p>
-        <p className="max-w-xs text-center text-muted-foreground text-xs">
-          You can leave this page. The image finishes either way and lands in
-          your history.
-        </p>
-      </div>
+      <Empty className="min-h-72 border border-border border-dashed">
+        <EmptyHeader>
+          <EmptyMedia>
+            <Spinner className="size-5" />
+          </EmptyMedia>
+          <EmptyTitle>Making your image · about {tierSeconds}s</EmptyTitle>
+          <EmptyDescription>
+            You can leave this page. The image finishes either way and lands in
+            your history.
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     );
   }
 
   if (!result) {
     return (
-      <div className="flex min-h-72 flex-1 flex-col items-center justify-center gap-2 rounded-3xl border border-border border-dashed px-6 text-center">
-        <p className="font-heading font-medium text-2xl tracking-[-0.04em]">
-          Describe it, and see it.
-        </p>
-        <p className="max-w-sm text-muted-foreground text-sm leading-6">
-          Write what you want on the left. Add reference images if you want the
-          model to follow a look.
-        </p>
-      </div>
+      <Empty className="min-h-72 border border-border border-dashed">
+        <EmptyHeader>
+          <EmptyTitle className="text-2xl tracking-[-0.04em]">
+            Describe it, and see it.
+          </EmptyTitle>
+          <EmptyDescription>
+            Write what you want on the left. Add reference images if you want
+            the model to follow a look.
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     );
   }
 
   if (!result.imageUrl) {
     return (
-      <div className="flex min-h-72 flex-1 flex-col items-center justify-center gap-2 rounded-3xl border border-border border-dashed px-6 text-center">
-        <p className="font-medium">
-          {result.status === "failed"
-            ? "That one failed"
-            : "That image is gone"}
-        </p>
-        <p className="max-w-sm text-muted-foreground text-sm leading-6">
-          {result.status === "failed"
-            ? (result.errorMessage ?? "Try a different prompt.")
-            : "Images are deleted after 90 days unless you share them."}
-        </p>
-      </div>
+      <Empty className="min-h-72 border border-border border-dashed">
+        <EmptyHeader>
+          <EmptyTitle>
+            {result.status === "failed"
+              ? "That one failed"
+              : "That image is gone"}
+          </EmptyTitle>
+          <EmptyDescription>
+            {result.status === "failed"
+              ? (result.errorMessage ?? "Try a different prompt.")
+              : "Images are deleted after 90 days unless you share them."}
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     );
   }
 

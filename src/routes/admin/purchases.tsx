@@ -2,6 +2,7 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
 import { listAllPurchases, recheckPurchase } from "@/lib/admin.functions";
 import { formatIdr, formatMoment } from "@/lib/format";
@@ -26,16 +27,19 @@ function AdminPurchases() {
         second time.
       </p>
 
-      <ul className="mt-8 divide-y rounded-3xl border">
-        {purchases.map((purchase) => (
-          <PurchaseRow key={purchase.id} purchase={purchase} />
-        ))}
-        {purchases.length === 0 ? (
-          <li className="px-5 py-10 text-center text-muted-foreground text-sm">
-            Nobody has bought credits yet.
-          </li>
-        ) : null}
-      </ul>
+      {purchases.length === 0 ? (
+        <Empty className="mt-8 border">
+          <EmptyHeader>
+            <EmptyTitle>Nobody has bought credits yet.</EmptyTitle>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        <ul className="mt-8 divide-y rounded-3xl border">
+          {purchases.map((purchase) => (
+            <PurchaseRow key={purchase.id} purchase={purchase} />
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
@@ -92,7 +96,7 @@ function PurchaseRow({ purchase }: PurchaseRowProps) {
             type="button"
             variant="outline"
           >
-            {busy ? <Spinner className="size-3.5" /> : null}
+            {busy ? <Spinner data-icon="inline-start" /> : null}
             Re-check
           </Button>
         ) : null}

@@ -1,6 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { Card } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { getAdminStats } from "@/lib/admin.functions";
 import { formatIdr } from "@/lib/format";
 import { PLANNING_USD_TO_IDR } from "@/lib/pricing";
@@ -44,26 +50,27 @@ function AdminOverview() {
       </h2>
 
       {stats.stuckGenerations > 0 ? (
-        <p
-          className="mt-6 rounded-2xl border border-destructive/40 bg-destructive/5 px-5 py-4 text-sm"
-          role="alert"
-        >
-          {stats.stuckGenerations} generations have been pending for over half
-          an hour. The five-minute cron refunds these, so if this number is not
-          falling, the cron is not running.
-        </p>
+        <Alert className="mt-6" variant="destructive">
+          <AlertTitle>
+            {stats.stuckGenerations} generations have been pending for over half
+            an hour.
+          </AlertTitle>
+          <AlertDescription>
+            The five-minute cron refunds these, so if this number is not
+            falling, the cron is not running.
+          </AlertDescription>
+        </Alert>
       ) : null}
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {cards.map((card) => (
-          <Card
-            className="rounded-3xl border bg-transparent p-5 shadow-none ring-0"
-            key={card.label}
-          >
-            <p className="text-muted-foreground text-sm">{card.label}</p>
-            <p className="mt-1 font-medium text-2xl tracking-[-0.04em] tabular-nums">
-              {card.value}
-            </p>
+          <Card key={card.label} size="sm">
+            <CardHeader>
+              <CardDescription>{card.label}</CardDescription>
+              <CardTitle className="text-2xl tracking-[-0.04em] tabular-nums">
+                {card.value}
+              </CardTitle>
+            </CardHeader>
           </Card>
         ))}
       </div>

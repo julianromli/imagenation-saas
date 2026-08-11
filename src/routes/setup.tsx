@@ -1,9 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { LoaderCircle } from "lucide-react";
 import { useState } from "react";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import { getSetupStatus, runSetup } from "@/lib/setup.functions";
 
 export const Route = createFileRoute("/setup")({
@@ -60,41 +67,38 @@ function SetupPage() {
           live in <code>src/lib/pricing.ts</code> and images are made on demand.
         </p>
 
-        <section
-          className={
-            result.imageKey.ok
-              ? "mt-10 rounded-3xl border p-6"
-              : "mt-10 rounded-3xl border border-destructive/40 bg-destructive/5 p-6"
-          }
+        <Alert
+          className="mt-10"
+          variant={result.imageKey.ok ? "default" : "destructive"}
         >
-          <h2 className="font-medium">
+          <AlertTitle>
             {result.imageKey.ok
               ? "Your image key works"
               : "Your image key does not work"}
-          </h2>
-          <p className="mt-2 text-muted-foreground text-sm leading-6">
+          </AlertTitle>
+          <AlertDescription>
             {result.imageKey.ok
               ? "OpenRouter answered and the image model is available to this key. Put a spend limit on it before you take money."
               : `${result.imageKey.message}. Nobody can generate an image until this is fixed. Set OPENROUTER_API_KEY as a Worker secret and reload.`}
-          </p>
-        </section>
+          </AlertDescription>
+        </Alert>
 
-        <section className="mt-6 rounded-3xl border p-6">
-          <h2 className="font-medium">One step left</h2>
-          <p className="mt-2 text-muted-foreground text-sm leading-6">
+        <Alert className="mt-6">
+          <AlertTitle>One step left</AlertTitle>
+          <AlertDescription>
             Register this URL as your Mayar webhook. It contains a secret, so
             treat it like a password. This page will not show it again.
-          </p>
+          </AlertDescription>
           <code className="mt-4 block overflow-x-auto rounded-2xl bg-muted p-4 text-xs">
             {result.webhookUrl}
           </code>
-          <p className="mt-4 text-muted-foreground text-sm leading-6">
+          <AlertDescription className="mt-4">
             Registering it is optional. Payments are always proved by looking
             the transaction up with Mayar, and a scheduled job reconciles
             purchases every five minutes. The webhook only makes credits arrive
             faster.
-          </p>
-        </section>
+          </AlertDescription>
+        </Alert>
 
         <Link
           className="mt-8 inline-flex text-sm underline-offset-4 hover:underline"
@@ -138,58 +142,56 @@ function SetupPage() {
       </p>
 
       {status.tokenConfigured ? null : (
-        <p className="mt-6 rounded-2xl border border-destructive/40 p-4 text-destructive text-sm">
-          SETUP_TOKEN is not set. Add it as a Worker secret, then reload.
-        </p>
+        <Alert className="mt-6" variant="destructive">
+          <AlertDescription>
+            SETUP_TOKEN is not set. Add it as a Worker secret, then reload.
+          </AlertDescription>
+        </Alert>
       )}
 
-      <form className="mt-8 flex flex-col gap-4" onSubmit={submit}>
-        <label className="flex flex-col gap-2 text-sm" htmlFor="setup-token">
-          Setup token
-          <Input
-            autoComplete="off"
-            id="setup-token"
-            name="token"
-            required
-            type="password"
-          />
-        </label>
-        <label className="flex flex-col gap-2 text-sm" htmlFor="setup-name">
-          Your name
-          <Input id="setup-name" name="name" required type="text" />
-        </label>
-        <label className="flex flex-col gap-2 text-sm" htmlFor="setup-email">
-          Email
-          <Input id="setup-email" name="email" required type="email" />
-        </label>
-        <label className="flex flex-col gap-2 text-sm" htmlFor="setup-password">
-          Password
-          <Input
-            autoComplete="new-password"
-            id="setup-password"
-            minLength={8}
-            name="password"
-            required
-            type="password"
-          />
-        </label>
+      <form className="mt-8" onSubmit={submit}>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="setup-token">Setup token</FieldLabel>
+            <Input
+              autoComplete="off"
+              id="setup-token"
+              name="token"
+              required
+              type="password"
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="setup-name">Your name</FieldLabel>
+            <Input id="setup-name" name="name" required type="text" />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="setup-email">Email</FieldLabel>
+            <Input id="setup-email" name="email" required type="email" />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="setup-password">Password</FieldLabel>
+            <Input
+              autoComplete="new-password"
+              id="setup-password"
+              minLength={8}
+              name="password"
+              required
+              type="password"
+            />
+          </Field>
 
-        {error ? (
-          <p className="text-destructive text-sm" role="alert">
-            {error}
-          </p>
-        ) : null}
+          <FieldError>{error}</FieldError>
 
-        <Button
-          className="mt-2 rounded-full"
-          disabled={submitting || !status.tokenConfigured}
-          type="submit"
-        >
-          {submitting ? (
-            <LoaderCircle aria-hidden="true" className="animate-spin" />
-          ) : null}
-          Complete setup
-        </Button>
+          <Button
+            className="rounded-full"
+            disabled={submitting || !status.tokenConfigured}
+            type="submit"
+          >
+            {submitting ? <Spinner data-icon="inline-start" /> : null}
+            Complete setup
+          </Button>
+        </FieldGroup>
       </form>
     </main>
   );

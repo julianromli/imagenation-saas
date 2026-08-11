@@ -1,7 +1,10 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { FieldError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { adjustAccountCredits, listAccounts } from "@/lib/admin.functions";
@@ -40,16 +43,19 @@ function AdminAccounts() {
         value={search}
       />
 
-      <ul className="mt-6 divide-y rounded-3xl border">
-        {filtered.map((account) => (
-          <AccountRow account={account} key={account.id} />
-        ))}
-        {filtered.length === 0 ? (
-          <li className="px-5 py-8 text-center text-muted-foreground text-sm">
-            No accounts match that.
-          </li>
-        ) : null}
-      </ul>
+      {filtered.length === 0 ? (
+        <Empty className="mt-6 border">
+          <EmptyHeader>
+            <EmptyTitle>No accounts match that.</EmptyTitle>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        <ul className="mt-6 divide-y rounded-3xl border">
+          {filtered.map((account) => (
+            <AccountRow account={account} key={account.id} />
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
@@ -106,9 +112,9 @@ function AccountRow({ account }: AccountRowProps) {
           <span className="block truncate font-medium text-sm">
             {account.name}
             {account.role === "admin" ? (
-              <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-muted-foreground text-xs">
+              <Badge className="ml-2" variant="secondary">
                 admin
-              </span>
+              </Badge>
             ) : null}
           </span>
           <span className="block truncate text-muted-foreground text-xs">
@@ -150,14 +156,10 @@ function AccountRow({ account }: AccountRowProps) {
             onClick={apply}
             type="button"
           >
-            {busy ? <Spinner className="size-4" /> : null}
+            {busy ? <Spinner data-icon="inline-start" /> : null}
             Apply
           </Button>
-          {error ? (
-            <p className="text-destructive text-sm sm:col-span-3" role="alert">
-              {error}
-            </p>
-          ) : null}
+          <FieldError className="sm:col-span-3">{error}</FieldError>
         </div>
       ) : null}
     </li>

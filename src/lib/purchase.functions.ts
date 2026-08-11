@@ -21,7 +21,8 @@ import { consumeRateLimit } from "@/lib/rate-limit";
 const INVOICE_LIFETIME_MS = 24 * 60 * 60 * 1000;
 
 const startPurchaseSchema = z.object({
-  mobile: z.string().trim().min(8).max(24),
+  /** Omitted once the account already carries a number. */
+  mobile: z.string().trim().min(8).max(24).optional(),
   packId: z.string().min(1).max(40),
 });
 
@@ -36,6 +37,28 @@ async function requireUser() {
 
   return session.user;
 }
+
+/**
+ * The number kept on the account, read from the database rather than the
+ * session. The session is cookie-cached, so it can lag a fresh first purchase.
+ */
+async function readSavedMobile(userId: string) {
+  const row = await getDb().query.user.findFirst({
+    columns: { mobile: true },
+    where: eq(users.id, userId),
+  });
+
+  return row?.mobile ?? null;
+}
+
+/** Lets the checkout form prefill, and skip the question for repeat buyers. */
+export const getSavedMobile = createServerFn({ method: "GET" }).handler(
+  async () => {
+    const user = await requireUser();
+
+    return readSavedMobile(user.id);
+  }
+);
 
 /**
  * Creates a Mayar invoice for one credit pack.
@@ -71,12 +94,21 @@ export const startPurchase = createServerFn({ method: "POST" })
       return { paymentUrl: existing.paymentUrl, reference: existing.reference };
     }
 
-    // Remembered so the buyer is only ever asked once. Mayar requires it on
-    // every invoice.
-    await db
-      .update(users)
-      .set({ mobile: data.mobile, updatedAt: new Date() })
-      .where(eq(users.id, user.id));
+    // Mayar requires a mobile number on every invoice. It is asked once, kept
+    // on the account, and reused for every later purchase.
+    const savedMobile = await readSavedMobile(user.id);
+    const mobile = data.mobile ?? savedMobile;
+
+    if (!mobile) {
+      throw new Error("A mobile number is required");
+    }
+
+    if (mobile !== savedMobile) {
+      await db
+        .update(users)
+        .set({ mobile, updatedAt: new Date() })
+        .where(eq(users.id, user.id));
+    }
 
     const purchaseId = createId();
     const reference = createPurchaseReference();
@@ -108,7 +140,7 @@ export const startPurchase = createServerFn({ method: "POST" })
           rate: pack.amount,
         },
       ],
-      mobile: data.mobile,
+      mobile,
       name: user.name,
       redirectUrl: `${origin}/credits?purchase=${reference}`,
     });

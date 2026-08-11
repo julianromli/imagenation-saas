@@ -3,6 +3,13 @@ import { Check, Copy, Link2, Link2Off } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { Switch } from "@/components/ui/switch";
 import { formatMoment } from "@/lib/format";
 import type { GenerationView } from "@/lib/generation.functions";
@@ -30,12 +37,12 @@ function HistoryPage() {
         <h1 className="font-heading font-medium text-4xl tracking-[-0.05em]">
           Sign in to see your images.
         </h1>
-        <Link
-          className="mt-6 inline-flex min-h-11 items-center rounded-full bg-foreground px-5 text-background text-sm"
-          to="/auth"
+        <Button
+          className="mt-6 min-h-11 rounded-full px-5"
+          render={<Link to="/auth" />}
         >
           Sign in
-        </Link>
+        </Button>
       </main>
     );
   }
@@ -51,18 +58,22 @@ function HistoryPage() {
       </p>
 
       {generations.length === 0 ? (
-        <div className="mt-12 rounded-3xl border border-border border-dashed px-6 py-16 text-center">
-          <p className="font-medium">Nothing here yet.</p>
-          <p className="mt-2 text-muted-foreground text-sm">
-            Your images will appear here as you make them.
-          </p>
-          <Link
-            className="mt-6 inline-flex min-h-11 items-center rounded-full bg-foreground px-5 text-background text-sm"
-            to="/"
-          >
-            Make one
-          </Link>
-        </div>
+        <Empty className="mt-12 border border-border border-dashed">
+          <EmptyHeader>
+            <EmptyTitle>Nothing here yet.</EmptyTitle>
+            <EmptyDescription>
+              Your images will appear here as you make them.
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button
+              className="min-h-11 rounded-full px-5"
+              render={<Link to="/" />}
+            >
+              Make one
+            </Button>
+          </EmptyContent>
+        </Empty>
       ) : (
         <ul className="mt-10 grid gap-6 sm:grid-cols-2">
           {generations.map((generation) => (
@@ -193,9 +204,9 @@ function HistoryCard({ generation }: { generation: GenerationView }) {
                 variant="outline"
               >
                 {copied ? (
-                  <Check aria-hidden="true" className="size-4" />
+                  <Check aria-hidden="true" data-icon="inline-start" />
                 ) : (
-                  <Copy aria-hidden="true" className="size-4" />
+                  <Copy aria-hidden="true" data-icon="inline-start" />
                 )}
                 {copied ? "Copied" : "Copy link"}
               </Button>

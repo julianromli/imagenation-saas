@@ -7,13 +7,20 @@ import {
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { listCreditHistory } from "@/lib/credits.functions";
 import { formatDelta, formatIdr, formatMoment } from "@/lib/format";
 import { CREDIT_PACKS, idrPerCredit, RESOLUTION_TIERS } from "@/lib/pricing";
 import {
+  getSavedMobile,
   listPurchases,
   refreshPurchase,
   startPurchase,
@@ -27,17 +34,18 @@ export const Route = createFileRoute("/credits")({
     meta: [{ title: "Credits — Imagenation" }],
   }),
   loader: async () => {
-    const [entries, purchases] = await Promise.all([
+    const [entries, purchases, savedMobile] = await Promise.all([
       listCreditHistory().catch(() => null),
       listPurchases().catch(() => []),
+      getSavedMobile().catch(() => null),
     ]);
 
-    return { entries, purchases };
+    return { entries, purchases, savedMobile };
   },
 });
 
 function CreditsPage() {
-  const { entries, purchases } = Route.useLoaderData();
+  const { entries, purchases, savedMobile } = Route.useLoaderData();
   const { balance, signedIn } = rootApi.useLoaderData();
 
   return (
@@ -84,7 +92,7 @@ function CreditsPage() {
         </p>
       </section>
 
-      <PackList signedIn={signedIn} />
+      <PackList savedMobile={savedMobile} signedIn={signedIn} />
 
       {purchases.length > 0 ? (
         <section className="mt-14">
@@ -132,8 +140,15 @@ function CreditsPage() {
   );
 }
 
-function PackList({ signedIn }: { signedIn: boolean }) {
-  const [mobile, setMobile] = useState("");
+type PackListProps = {
+  savedMobile: string | null;
+  signedIn: boolean;
+};
+
+function PackList({ savedMobile, signedIn }: PackListProps) {
+  const [mobile, setMobile] = useState(savedMobile ?? "");
+  // A returning buyer sees the remembered number, not the question again.
+  const [askMobile, setAskMobile] = useState(savedMobile === null);
   const [pendingPack, setPendingPack] = useState<string | null>(null);
   const [error, setError] = useState("");
 
@@ -142,7 +157,9 @@ function PackList({ signedIn }: { signedIn: boolean }) {
     setPendingPack(packId);
 
     try {
-      const { paymentUrl } = await startPurchase({ data: { mobile, packId } });
+      const { paymentUrl } = await startPurchase({
+        data: { mobile: mobile.trim(), packId },
+      });
 
       window.location.href = paymentUrl;
     } catch (caught) {
@@ -157,23 +174,39 @@ function PackList({ signedIn }: { signedIn: boolean }) {
     <section className="mt-12">
       <h2 className="text-muted-foreground text-sm">Buy credits</h2>
 
-      {signedIn ? (
-        <div className="mt-3 grid max-w-sm gap-2">
-          <Label htmlFor="mobile">Mobile number</Label>
-          <Input
-            autoComplete="tel"
-            id="mobile"
-            inputMode="tel"
-            onChange={(event) => setMobile(event.target.value)}
-            placeholder="08123456789"
-            required
-            type="tel"
-            value={mobile}
-          />
-          <p className="text-muted-foreground text-xs">
-            Mayar needs this on the invoice. It is asked once and remembered.
-          </p>
-        </div>
+      {signedIn && askMobile ? (
+        <FieldGroup className="mt-3 max-w-sm">
+          <Field>
+            <FieldLabel htmlFor="mobile">Mobile number</FieldLabel>
+            <Input
+              autoComplete="tel"
+              id="mobile"
+              inputMode="tel"
+              onChange={(event) => setMobile(event.target.value)}
+              placeholder="08123456789"
+              required
+              type="tel"
+              value={mobile}
+            />
+            <FieldDescription>
+              Mayar needs this on the invoice. It is asked once and remembered.
+            </FieldDescription>
+          </Field>
+        </FieldGroup>
+      ) : null}
+
+      {signedIn && !askMobile ? (
+        <p className="mt-3 text-muted-foreground text-sm">
+          Your invoice goes to{" "}
+          <span className="text-foreground tabular-nums">{mobile}</span>.{" "}
+          <button
+            className="underline underline-offset-4"
+            onClick={() => setAskMobile(true)}
+            type="button"
+          >
+            Change number
+          </button>
+        </p>
       ) : null}
 
       <ul className="mt-6 grid gap-4 sm:grid-cols-3">
@@ -197,27 +230,24 @@ function PackList({ signedIn }: { signedIn: boolean }) {
                 variant={pack.id === "standard" ? "default" : "outline"}
               >
                 {pendingPack === pack.id ? (
-                  <Spinner className="size-4" />
+                  <Spinner data-icon="inline-start" />
                 ) : null}
                 Buy
               </Button>
             ) : (
-              <Link
-                className="mt-6 inline-flex min-h-11 items-center justify-center rounded-full border border-border text-sm"
-                to="/auth"
+              <Button
+                className="mt-6 min-h-11 rounded-full"
+                render={<Link to="/auth" />}
+                variant="outline"
               >
                 Sign in
-              </Link>
+              </Button>
             )}
           </li>
         ))}
       </ul>
 
-      {error ? (
-        <p className="mt-4 text-destructive text-sm" role="alert">
-          {error}
-        </p>
-      ) : null}
+      <FieldError className="mt-4">{error}</FieldError>
     </section>
   );
 }
@@ -282,7 +312,7 @@ function PurchaseRow({ purchase }: PurchaseRowProps) {
               type="button"
               variant="outline"
             >
-              {busy ? <Spinner className="size-3.5" /> : null}
+              {busy ? <Spinner data-icon="inline-start" /> : null}
               Re-check
             </Button>
           </>
