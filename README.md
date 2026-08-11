@@ -14,6 +14,10 @@ credits are bought as packs. There is no landing page: `/` is the app.
 Everything the app needs is provisioned for you. Prepare four secrets before you
 click: see [Environment variables](#environment-variables).
 
+## Demo
+
+https://github.com/user-attachments/assets/6dcb50c6-6ff6-43f6-ab1f-35d72a09a628
+
 ## Stack
 
 - TanStack Start (React 19) on Cloudflare Workers
