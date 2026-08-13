@@ -16,7 +16,7 @@ click: see [Environment variables](#environment-variables).
 
 ## Demo
 
-https://github.com/user-attachments/assets/6dcb50c6-6ff6-43f6-ab1f-35d72a09a628
+<img width="800" height="435" alt="imagenation-saas" src="https://github.com/user-attachments/assets/cfcfd5b3-53f9-44f0-915c-400af72ca385" />
 
 ## Stack
 
