@@ -34,11 +34,61 @@ https://github.com/user-attachments/assets/6dcb50c6-6ff6-43f6-ab1f-35d72a09a628
 
 1. Click **Deploy to Cloudflare**. Cloudflare forks the repository and creates
    the D1 database, the R2 bucket, and the rate limiters from `wrangler.jsonc`.
-2. Fill in the four secrets it asks for.
+2. Fill in the four secrets. The form lists their names and nothing else, so
+   [what the four secrets are](#what-the-four-secrets-are) explains each one.
+   Have them ready before you click.
 3. When the deploy finishes, open `https://<your-worker>.workers.dev/setup` and
    enter your setup token. That page creates your administrator account, checks
    that your OpenRouter key can reach the image model, and shows the Mayar
    webhook URL to register.
+4. Work through [After the first deploy](#after-the-first-deploy). Setting
+   `BETTER_AUTH_URL` is the one that matters most.
+
+### What the four secrets are
+
+Two you invent. Two you collect from another service. Nothing else is asked for,
+and none of them can be changed from inside the app afterwards — they are Worker
+secrets, edited in the Cloudflare dashboard or with `wrangler secret put`.
+
+#### `BETTER_AUTH_SECRET`
+
+Signs session cookies. Any long random string; nobody ever types it again.
+
+```sh
+openssl rand -base64 32
+```
+
+Keep a copy. Changing it later signs every existing session out.
+
+#### `SETUP_TOKEN`
+
+Unlocks `/setup`, the one-time page that creates your administrator account. You
+type this once, at step 3 above, so keep it somewhere you can reach in a minute.
+
+```sh
+openssl rand -base64 24
+```
+
+#### `OPENROUTER_API_KEY`
+
+Pays for every generated image. Create one at
+[openrouter.ai/settings/keys](https://openrouter.ai/settings/keys), then **put a
+spend limit on it**. That limit is the only thing between a bug and your
+balance.
+
+#### `MAYAR_API_KEY`
+
+Sells the credit packs. This app ships with `MAYAR_ENVIRONMENT` set to
+`production`, so it has to be a production key from
+[web.mayar.id/api-keys](https://web.mayar.id/api-keys). A sandbox key
+authenticates against a different host and will simply be refused.
+
+Want to take test payments first? On your fork, set `MAYAR_ENVIRONMENT` to
+`sandbox` in `wrangler.jsonc` and use a key from
+[web.mayar.io/api-keys](https://web.mayar.io/api-keys).
+
+No `openssl` on your machine? Any password generator does for the first two.
+They only have to be long and unguessable.
 
 ### Local development
 

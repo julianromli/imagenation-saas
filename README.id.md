@@ -31,11 +31,63 @@ sebelum menekan tombol: lihat [Variabel lingkungan](#variabel-lingkungan).
 
 1. Klik **Deploy to Cloudflare**. Cloudflare menyalin repositori ini dan membuat
    basis data D1, bucket R2, serta rate limiter dari `wrangler.jsonc`.
-2. Isi empat secret yang diminta.
+2. Isi empat secret. Formulirnya hanya menampilkan namanya, jadi
+   [apa isi keempat secret itu](#apa-isi-keempat-secret-itu) menjelaskan satu per
+   satu. Siapkan sebelum Anda mengklik.
 3. Setelah deploy selesai, buka `https://<worker-anda>.workers.dev/setup` lalu
    masukkan setup token Anda. Halaman itu membuat akun administrator pertama,
    memeriksa bahwa kunci OpenRouter Anda dapat menjangkau model gambar, dan
    menampilkan URL webhook Mayar untuk didaftarkan.
+4. Kerjakan [Setelah deploy pertama](#setelah-deploy-pertama). Yang paling
+   penting di sana adalah memasang `BETTER_AUTH_URL`.
+
+### Apa isi keempat secret itu
+
+Dua Anda karang sendiri. Dua lagi Anda ambil dari layanan lain. Tidak ada yang
+lain diminta, dan tidak satu pun bisa diubah dari dalam aplikasi setelahnya —
+semuanya secret Worker, disunting di dasbor Cloudflare atau dengan
+`wrangler secret put`.
+
+#### `BETTER_AUTH_SECRET`
+
+Menandatangani cookie sesi. Teks acak yang panjang; tidak pernah diketik lagi.
+
+```sh
+openssl rand -base64 32
+```
+
+Simpan salinannya. Menggantinya kemudian mengeluarkan semua sesi yang ada.
+
+#### `SETUP_TOKEN`
+
+Membuka `/setup`, halaman sekali jalan yang membuat akun administrator Anda.
+Anda mengetiknya sekali, pada langkah 3 di atas, jadi simpan di tempat yang
+mudah dijangkau sebentar lagi.
+
+```sh
+openssl rand -base64 24
+```
+
+#### `OPENROUTER_API_KEY`
+
+Membayar setiap gambar yang dibuat. Buat di
+[openrouter.ai/settings/keys](https://openrouter.ai/settings/keys), lalu
+**pasang batas pengeluaran padanya**. Batas itu satu-satunya penghalang antara
+sebuah bug dan saldo Anda.
+
+#### `MAYAR_API_KEY`
+
+Menjual paket kredit. Aplikasi ini dikirim dengan `MAYAR_ENVIRONMENT` bernilai
+`production`, jadi ini harus kunci produksi dari
+[web.mayar.id/api-keys](https://web.mayar.id/api-keys). Kunci sandbox
+terautentikasi ke host yang berbeda dan akan ditolak.
+
+Mau menerima pembayaran uji dulu? Di salinan repo Anda, ubah
+`MAYAR_ENVIRONMENT` menjadi `sandbox` di `wrangler.jsonc` dan pakai kunci dari
+[web.mayar.io/api-keys](https://web.mayar.io/api-keys).
+
+Tidak punya `openssl`? Pembangkit kata sandi apa pun cukup untuk dua yang
+pertama. Syaratnya hanya panjang dan tidak bisa ditebak.
 
 ### Pengembangan lokal
 
