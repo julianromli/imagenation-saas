@@ -293,12 +293,22 @@ export const creditPurchases = sqliteTable(
     creditedAt: integer("credited_at", { mode: "timestamp_ms" }),
     credits: integer("credits").notNull(),
     currency: text("currency").default("IDR").notNull(),
+    // When the payment stops being payable. Mayar's channel expiry is written
+    // here when it gives one, so there is one expiry and not two.
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
     id: text("id").primaryKey(),
+    // The last time this purchase was read back from Mayar. Claimed before the
+    // call, so a burst of polls produces one request. See ADR-0021.
+    lastCheckedAt: integer("last_checked_at", { mode: "timestamp_ms" }),
     mayarInvoiceId: text("mayar_invoice_id"),
     mayarTransactionId: text("mayar_transaction_id"),
     packId: text("pack_id").notNull(),
     paidAt: integer("paid_at", { mode: "timestamp_ms" }),
+    // What the buyer needs on screen to pay: the QR string, the virtual account
+    // number, or the e-wallet links. Normalized before it is written, never the
+    // raw provider object, and never evidence of payment.
+    paymentDetail: text("payment_detail", { mode: "json" }).$type<JsonObject>(),
+    paymentMethod: text("payment_method"),
     paymentUrl: text("payment_url"),
     reference: text("reference").notNull(),
     status: text("status", { enum: PURCHASE_STATUS })

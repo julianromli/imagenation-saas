@@ -21,8 +21,8 @@ export class InvalidRequestError extends Error {
 export class RateLimitError extends Error {
   readonly status = 429;
 
-  constructor(message: string) {
-    super(message);
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "RateLimitError";
   }
 }

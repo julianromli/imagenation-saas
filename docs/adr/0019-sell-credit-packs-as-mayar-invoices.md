@@ -1,5 +1,7 @@
 # Sell credit packs as Mayar invoices
 
+Partly superseded by ADR-0021, which pins each invoice to one payment channel, renders the payment in our own UI, and changes the reuse rule and the invoice lifetime accordingly. The decision to sell packs as invoices built at request time is unchanged.
+
 Credit packs are sold by creating a Mayar invoice per purchase. Mayar payment links and Mayar's own credit checkout were both rejected.
 
 A payment link needs a Mayar product to exist first, which means `/setup` would have to create products on the operator's Mayar account and persist their ids. That is exactly the account-specific state this template avoids: `wrangler.jsonc` deliberately carries no binding ids so that a fresh operator supplies secrets and nothing else. An invoice is built from `items[]` at request time, so packs can live in code and nothing is provisioned anywhere.

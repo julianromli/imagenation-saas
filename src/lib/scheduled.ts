@@ -1,18 +1,29 @@
 import { env } from "cloudflare:workers";
-import { and, eq, inArray, isNull, lt } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, or } from "drizzle-orm";
 
 import { getDb } from "@/db";
 import { creditPurchases, generations, webhookEvents } from "@/db/schema";
 import { abandonGeneration } from "@/lib/generation";
+import { isMayarRateLimit } from "@/lib/mayar";
 import {
   GENERATION_TIMEOUT_MINUTES,
   IMAGE_RETENTION_DAYS,
 } from "@/lib/pricing";
-import { reconcilePurchase } from "@/lib/purchase.functions";
+import { EXPIRY_GRACE_MS, reconcilePurchase } from "@/lib/purchase";
 
-// Mayar allows 50 requests per minute for each API key. One provider call per
-// purchase, well under the limit at a five minute schedule.
-const MAX_PURCHASES_PER_RUN = 30;
+/**
+ * How many purchases one run may read back from Mayar.
+ *
+ * Mayar allows 50 requests a minute for each API key, and the checkout now
+ * spends most of that: a browser watching a payment reads back up to four times
+ * a minute. Since buyers poll their own purchases, what is left for this job is
+ * the closed tabs, so ten is enough and the headroom goes where it is needed.
+ * See ADR-0021.
+ */
+const MAX_PURCHASES_PER_RUN = 10;
+
+/** A purchase a browser just read does not need reading again here. */
+const CRON_READ_BACK_MS = 60_000;
 
 /** R2 deletes are cheap, but a run should still end. */
 const MAX_IMAGES_PER_RUN = 200;
@@ -63,32 +74,54 @@ export async function reconcilePendingPurchases(now = new Date()) {
     limit: MAX_PURCHASES_PER_RUN,
     where: and(
       eq(creditPurchases.status, "pending"),
-      isNull(creditPurchases.creditedAt)
+      isNull(creditPurchases.creditedAt),
+      or(
+        isNull(creditPurchases.lastCheckedAt),
+        lt(
+          creditPurchases.lastCheckedAt,
+          new Date(now.getTime() - CRON_READ_BACK_MS)
+        )
+      )
     ),
   });
+  // An unpaid invoice is closed only once its grace has run out. Closing it the
+  // moment it expires would stop every future run from looking, and a payment
+  // landing just after the last read would be money taken with no credits.
+  const closeBefore = new Date(now.getTime() - EXPIRY_GRACE_MS);
 
   let settled = 0;
   let expired = 0;
+  let rateLimited = false;
 
   for (const purchase of pending) {
     // biome-ignore lint/performance/noAwaitInLoops: One provider call at a time keeps this inside Mayar's rate limit.
-    const result = await reconcilePurchase(purchase.id).catch((error) => {
-      console.error(
-        `Could not reconcile purchase ${purchase.reference}`,
-        error
-      );
+    const result = await reconcilePurchase(purchase.id, {
+      minAgeMs: CRON_READ_BACK_MS,
+    }).catch((error) => {
+      // Mayar refusing the key means every remaining read would be refused too.
+      rateLimited = isMayarRateLimit(error);
+
+      if (!rateLimited) {
+        console.error(
+          `Could not reconcile purchase ${purchase.reference}`,
+          error
+        );
+      }
 
       return { settled: false };
     });
+
+    if (rateLimited) {
+      console.warn("Mayar rate limit reached; stopping this reconcile run");
+      break;
+    }
 
     if (result.settled) {
       settled += 1;
       continue;
     }
 
-    // An unpaid invoice past its own expiry is closed, so it stops being
-    // examined on every run from now on.
-    if (purchase.expiresAt && purchase.expiresAt < now) {
+    if (purchase.expiresAt && purchase.expiresAt < closeBefore) {
       await getDb()
         .update(creditPurchases)
         .set({ status: "expired", updatedAt: now })

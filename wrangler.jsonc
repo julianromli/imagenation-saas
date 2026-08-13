@@ -57,6 +57,18 @@
         "period": 60
       }
     },
+    // The checkout asks for a payment's status every few seconds while the
+    // buyer is on the screen. This is only an abuse net: what actually keeps
+    // Mayar's request budget safe is the read-back claim in purchase.ts, so the
+    // limit is set high enough that several tabs are not refused.
+    {
+      "name": "POLL_LIMITER",
+      "namespace_id": "2006",
+      "simple": {
+        "limit": 60,
+        "period": 60
+      }
+    },
     {
       "name": "WEBHOOK_LIMITER",
       "namespace_id": "2004",
@@ -79,7 +91,9 @@
   "triggers": {
     "crons": ["*/5 * * * *"]
   },
+  // Live payments. Set this to "sandbox" here, or in .dev.vars for local work
+  // only, to go back to test money. See "Environment variables" in README.md.
   "vars": {
-    "MAYAR_ENVIRONMENT": "sandbox"
+    "MAYAR_ENVIRONMENT": "production"
   }
 }

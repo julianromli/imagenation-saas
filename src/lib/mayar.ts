@@ -1,12 +1,20 @@
 import { z } from "zod";
 
 import type { JsonObject } from "@/db/schema";
+import type { MayarPaymentMethod } from "@/lib/payment-methods";
 import { getRuntimeEnv, requireEnv } from "@/lib/runtime-env";
 
 const invoiceResponseSchema = z.object({
   expiredAt: z.union([z.number(), z.string()]),
   id: z.string(),
   link: z.url(),
+  /**
+   * Undocumented, and read leniently on purpose. Pinning a `paymentMethod`
+   * makes Mayar return the payment instrument here, but no V2 page defines the
+   * shape, so a strict field would let an unrecognised response fail the whole
+   * create. `parseMayarPaymentDetail` decides what is usable. See ADR-0021.
+   */
+  paymentDetail: z.unknown().optional().nullable(),
   transactionId: z.string(),
 });
 
@@ -30,11 +38,27 @@ type InvoiceInput = {
   mobile: string;
   name: string;
   /**
+   * Pins the invoice to one channel, which is what makes Mayar issue the QR
+   * string, the virtual account, or the e-wallet deeplink on the create
+   * response instead of leaving the buyer to choose on the hosted page.
+   */
+  paymentMethod?: MayarPaymentMethod;
+  /**
    * Post-payment browser return URL. Official V1 docs document this field.
    * Sandbox-verified on V2 create: accepted and persisted on the invoice.
    */
   redirectUrl?: string;
 };
+
+/**
+ * A transaction as Mayar returned it to us.
+ *
+ * The type exists so a settled payment can be handed the transaction the caller
+ * already read instead of reading it again. Only `getMayarTransaction` produces
+ * one, which keeps ADR-0005 intact: the evidence is still a transaction we
+ * fetched ourselves, never a webhook payload.
+ */
+export type MayarTransaction = z.infer<typeof transactionResponseSchema>;
 
 export type MayarWebhook = {
   amount: number | null;
@@ -45,10 +69,56 @@ export type MayarWebhook = {
   transactionId: string | null;
 };
 
+/**
+ * Mayar answered 429.
+ *
+ * Two different refusals share that status. `duplicate` is the documented
+ * "wait one minute" on invoice create, which is keyed on the customer and the
+ * amount — sandbox-verified: three creates for one customer at one amount are
+ * refused however different the rest of the payload is. Anything else is the
+ * 50-requests-a-minute key limit, which every caller must back off from rather
+ * than retry. See ADR-0021.
+ */
+export class MayarRateLimitError extends Error {
+  readonly duplicate: boolean;
+  readonly retryAfterSeconds: number | null;
+
+  constructor(
+    message: string,
+    options: { duplicate: boolean; retryAfterSeconds: number | null }
+  ) {
+    super(message);
+    this.name = "MayarRateLimitError";
+    this.duplicate = options.duplicate;
+    this.retryAfterSeconds = options.retryAfterSeconds;
+  }
+}
+
+export function isMayarRateLimit(error: unknown): error is MayarRateLimitError {
+  return error instanceof MayarRateLimitError;
+}
+
 function apiBaseUrl() {
   return getRuntimeEnv().MAYAR_ENVIRONMENT === "production"
     ? "https://api.mayar.id/hl/v2"
     : "https://api.mayar.io/hl/v2";
+}
+
+function retryAfterFrom(response: Response) {
+  const header = Number(response.headers.get("retry-after"));
+
+  return Number.isFinite(header) && header > 0 ? header : null;
+}
+
+function refusal(message: string, response: Response, statusCode: number) {
+  if (statusCode !== 429) {
+    return new Error(`${message} (${statusCode})`);
+  }
+
+  return new MayarRateLimitError(message, {
+    duplicate: message.toLowerCase().includes("duplicate"),
+    retryAfterSeconds: retryAfterFrom(response),
+  });
 }
 
 async function requestMayar<T>(
@@ -78,7 +148,7 @@ async function requestMayar<T>(
       // Keep the status-based error when Mayar returns a non-JSON response.
     }
 
-    throw new Error(`${message} (${response.status})`);
+    throw refusal(message, response, response.status);
   }
 
   const body = (await response.json()) as {
@@ -88,13 +158,23 @@ async function requestMayar<T>(
     statusCode?: number;
   };
 
+  // The V2 envelope carries its own status, and it is not always the transport
+  // status, so a 200 with `statusCode: 4xx` is still a refusal.
   if (body.statusCode !== undefined && body.statusCode >= 400) {
     const message = body.messages ?? body.message ?? "Mayar request failed";
 
-    throw new Error(`${message} (${response.status})`);
+    throw refusal(message, response, body.statusCode);
   }
 
   return parse ? parse(body.data) : (body.data as T);
+}
+
+/**
+ * Exported so the lenient handling of `paymentDetail` can be tested without a
+ * network call: absent, null, and nonsense all have to parse.
+ */
+export function parseInvoiceResponse(value: unknown) {
+  return invoiceResponseSchema.parse(value);
 }
 
 export function createMayarInvoice(input: InvoiceInput) {
@@ -104,7 +184,7 @@ export function createMayarInvoice(input: InvoiceInput) {
       body: JSON.stringify(input),
       method: "POST",
     },
-    (value) => invoiceResponseSchema.parse(value)
+    parseInvoiceResponse
   );
 }
 

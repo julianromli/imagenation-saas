@@ -8,6 +8,13 @@
       "when": 1786353857094,
       "tag": "0000_faulty_the_phantom",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1786529351464,
+      "tag": "0001_motionless_tyger_tiger",
+      "breakpoints": true
     }
   ]
 }

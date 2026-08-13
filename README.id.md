@@ -65,9 +65,23 @@ tanpa ID di `wrangler.jsonc`, sehingga Wrangler membuatnya secara lokal saat
 | `OPENROUTER_API_KEY` | Ya | Membayar setiap gambar yang dibuat. **Pasang batas pengeluaran padanya.** |
 | `MAYAR_API_KEY` | Ya | Menjual paket kredit. Kunci sandbox dan produksi berbeda. |
 | `BETTER_AUTH_URL` | Tidak | URL publik Anda. Tanpa ini, Better Auth membaca origin dari tiap permintaan. |
-| `MAYAR_ENVIRONMENT` | Tidak | `sandbox` (bawaan) atau `production`. Diatur di `wrangler.jsonc`. |
+| `MAYAR_ENVIRONMENT` | Tidak | `production` (bawaan) atau `sandbox`. Diatur di `wrangler.jsonc`. |
 
-Biarkan `MAYAR_ENVIRONMENT=sandbox` sampai satu pembelian uji berhasil.
+**Pembayaran sudah live.** `MAYAR_ENVIRONMENT` bernilai `production` di
+`wrangler.jsonc`, jadi `MAYAR_API_KEY` harus kunci produksi dari
+[web.mayar.id](https://web.mayar.id/api-keys), dan setiap checkout — termasuk
+yang Anda mulai di `localhost` — membuat invoice sungguhan dengan uang
+sungguhan.
+
+Untuk menguji dengan uang percobaan, isi `MAYAR_ENVIRONMENT=sandbox` di
+`.dev.vars` dan pakai kunci dari [web.mayar.io](https://web.mayar.io/api-keys).
+`.dev.vars` menang atas `wrangler.jsonc`, jadi itu hanya mengubah pengembangan
+lokal.
+
+Checkout menawarkan QRIS, virtual account, dan e-wallet. Channel yang dimatikan
+di akun Mayar Anda akan gagal saat invoice dibuat, jadi daftar di
+[`src/lib/payment-methods.ts`](src/lib/payment-methods.ts) harus cocok dengan
+yang benar-benar dijual akun itu.
 
 ## Setelah deploy pertama
 
@@ -140,19 +154,33 @@ penghapusan berkala 90 hari.
 
 ## Membeli kredit
 
-1. Pembeli memilih paket. Mayar mewajibkan nomor ponsel pada setiap invoice,
-   jadi pembeli ditanya sekali dan nomornya diingat.
-2. Server membuat invoice Mayar dan menyimpan ID-nya. Invoice tertunda untuk
-   paket yang sama dipakai ulang, bukan diganti, karena Mayar menjawab
-   pembuatan ganda dengan `429`.
-3. Pembayaran dibuktikan dengan mengambil detail transaksi Mayar dan mencocokkan
+Checkout berlangsung dalam dialog di `/credits`. Tidak ada yang dikirim ke
+halaman pembayaran.
+
+1. Pembeli memilih paket dan metode bayar. Mayar mewajibkan nomor ponsel pada
+   setiap invoice, jadi pembeli ditanya sekali dan nomornya diingat.
+2. Server membuat invoice Mayar yang dikunci ke metode itu. Mayar menjawab
+   dengan alat bayarnya — string QRIS, nomor virtual account, atau tautan
+   e-wallet — dan dialog menampilkannya. Invoice tertunda untuk paket **dan
+   metode** yang sama dipakai ulang, bukan diganti.
+3. Dialog menanyakan status selama pembeli membayar. Jawabannya memuat kapan
+   harus bertanya lagi, dan klaim pada baris pembelian membuat beberapa tab
+   hanya menghasilkan satu permintaan ke Mayar.
+4. Pembayaran dibuktikan dengan mengambil detail transaksi Mayar dan mencocokkan
    jumlah, status `paid`, dan pembelian di `extraData`. Kembalinya peramban
    tidak pernah memberi kredit, begitu pula payload webhook sendirian.
-4. Kredit diberikan lewat entri buku besar dengan referensi unik, sehingga
-   webhook yang terulang, tombol periksa ulang, dan cron tidak dapat memberi
-   kredit dua kali.
-5. Setiap lima menit, cron menyelesaikan pembelian yang webhook-nya tidak pernah
-   tiba, dan menutup invoice yang kedaluwarsa tanpa dibayar.
+5. Kredit diberikan lewat entri buku besar dengan referensi unik, sehingga
+   webhook yang terulang, polling, tombol periksa ulang, dan cron tidak dapat
+   memberi kredit dua kali.
+6. Setiap lima menit, cron menyelesaikan pembelian yang webhook-nya tidak pernah
+   tiba, dan menutup invoice yang kedaluwarsa tanpa dibayar sejak satu jam lalu.
+
+Dua hal yang dipersulit Mayar, keduanya ditangani dan bukan disembunyikan. Mayar
+menolak invoice kedua untuk satu pelanggan dengan jumlah yang sama selama satu
+menit, jadi mengganti metode seketika dilaporkan sebagai "tunggu satu menit",
+bukan gagal diam-diam. Dan alat bayarnya tidak terdokumentasi, jadi dibaca
+longgar: apa pun yang tidak dikenali jatuh ke tautan halaman Mayar. Lihat
+[ADR-0021](docs/adr/0021-render-payment-instructions-in-our-own-ui.md).
 
 **Webhook bersifat opsional.** Webhook hanya mempercepat datangnya kredit.
 Karena pembayaran selalu dibuktikan lewat pencarian transaksi, dan karena cron

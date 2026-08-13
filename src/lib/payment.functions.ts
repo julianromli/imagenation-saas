@@ -1,4 +1,4 @@
-import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
 
 import { getDb, runBatch } from "@/db";
 import { creditPurchases, users, webhookEvents } from "@/db/schema";
@@ -7,13 +7,28 @@ import { createId } from "@/lib/ids";
 import {
   getMayarTransaction,
   isMayarPaid,
+  type MayarTransaction,
   type MayarWebhook,
   parseMayarWebhook,
 } from "@/lib/mayar";
 
 const CLAIM_LEASE_MS = 5 * 60 * 1000;
 
+/**
+ * How many pending purchases a webhook may be checked against.
+ *
+ * Each candidate costs one Mayar request, and the key allows fifty a minute for
+ * everything the app does. Five is enough: candidates are already narrowed to
+ * one customer at one amount, and the newest is almost always the right one.
+ */
+const MAX_WEBHOOK_CANDIDATES = 5;
+
 type ProcessOptions = {
+  /**
+   * A transaction the caller has already read from Mayar. Passing it saves the
+   * second read of the same record; it is the same evidence either way.
+   */
+  verifiedTransaction?: MayarTransaction;
   verifiedTransactionId?: string;
 };
 
@@ -46,6 +61,10 @@ async function findVerifiedTransactionForWebhook(webhook: MayarWebhook) {
     return null;
   }
 
+  // The payload is a hint, so it may order the candidates but never decide one.
+  // The gate below is what admits a transaction, and it is unchanged.
+  const hintedTransactionId =
+    typeof data.transactionId === "string" ? data.transactionId : null;
   const candidates = await getDb()
     .select({
       amount: creditPurchases.amount,
@@ -61,7 +80,11 @@ async function findVerifiedTransactionForWebhook(webhook: MayarWebhook) {
         sql`lower(${users.email}) = ${customerEmail}`
       )
     )
-    .limit(20);
+    .orderBy(
+      sql`case when ${creditPurchases.mayarTransactionId} = ${hintedTransactionId} then 0 else 1 end`,
+      desc(creditPurchases.createdAt)
+    )
+    .limit(MAX_WEBHOOK_CANDIDATES);
 
   for (const candidate of candidates) {
     if (!candidate.mayarTransactionId) {
@@ -211,11 +234,16 @@ export async function processMayarWebhook(
   const webhook = parseMayarWebhook(payload);
   const eventId = webhook.id;
   const db = getDb();
-  const verifiedTransactionId =
-    options.verifiedTransactionId ??
-    (webhook.eventType === "payment.received"
-      ? (await findVerifiedTransactionForWebhook(webhook))?.id
+  // Found once and carried through, so settlement does not read the same
+  // transaction from Mayar a second time.
+  const verifiedTransaction =
+    options.verifiedTransaction ??
+    (options.verifiedTransactionId === undefined &&
+    webhook.eventType === "payment.received"
+      ? ((await findVerifiedTransactionForWebhook(webhook)) ?? undefined)
       : undefined);
+  const verifiedTransactionId =
+    options.verifiedTransactionId ?? verifiedTransaction?.id;
   const [event] = await db
     .insert(webhookEvents)
     .values({
@@ -285,7 +313,11 @@ export async function processMayarWebhook(
   try {
     return {
       duplicate: false,
-      ...(await settleVerifiedPayment(eventRecord.id, verifiedTransactionId)),
+      ...(await settleVerifiedPayment(
+        eventRecord.id,
+        verifiedTransactionId,
+        verifiedTransaction
+      )),
     };
   } catch (error) {
     await markWebhookFailure(eventRecord.id, error);
@@ -303,10 +335,16 @@ export async function processMayarWebhook(
  */
 export async function settleVerifiedPayment(
   eventRecordId: string,
-  verifiedTransactionId: string
+  verifiedTransactionId: string,
+  verifiedTransaction?: MayarTransaction
 ) {
   const db = getDb();
-  const transactionDetail = await getMayarTransaction(verifiedTransactionId);
+  // Read here only when the caller has not already read it. Either way the
+  // evidence is a transaction fetched from Mayar, never a webhook payload.
+  const transactionDetail =
+    verifiedTransaction?.id === verifiedTransactionId
+      ? verifiedTransaction
+      : await getMayarTransaction(verifiedTransactionId);
   const extraData = objectValue(transactionDetail.extraData);
   const purchaseId =
     typeof extraData.purchaseId === "string" ? extraData.purchaseId : undefined;

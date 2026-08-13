@@ -11,6 +11,7 @@ export type LimiterName =
   | "AUTH_LIMITER"
   | "CHECKOUT_LIMITER"
   | "GENERATE_LIMITER"
+  | "POLL_LIMITER"
   | "SETUP_LIMITER"
   | "WEBHOOK_LIMITER";
 

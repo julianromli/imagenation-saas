@@ -68,9 +68,21 @@ provisions them on your account at deploy time.
 | `OPENROUTER_API_KEY` | Yes | Pays for every generated image. **Put a spend limit on it.** |
 | `MAYAR_API_KEY` | Yes | Sells credit packs. Sandbox and production keys differ. |
 | `BETTER_AUTH_URL` | No | Your public URL. Without it, Better Auth reads the origin from each request. |
-| `MAYAR_ENVIRONMENT` | No | `sandbox` (default) or `production`. Set in `wrangler.jsonc`. |
+| `MAYAR_ENVIRONMENT` | No | `production` (default) or `sandbox`. Set in `wrangler.jsonc`. |
 
-Keep `MAYAR_ENVIRONMENT=sandbox` until you have completed a test purchase.
+**Payments are live by default.** `MAYAR_ENVIRONMENT` is `production` in
+`wrangler.jsonc`, so `MAYAR_API_KEY` has to be a production key from
+[web.mayar.id](https://web.mayar.id/api-keys), and every checkout — including
+one you start on `localhost` — creates a real invoice for real money.
+
+To test with play money, put `MAYAR_ENVIRONMENT=sandbox` in `.dev.vars` and use
+a key from [web.mayar.io](https://web.mayar.io/api-keys). `.dev.vars` beats
+`wrangler.jsonc`, so that switches local development alone.
+
+The checkout offers QRIS, virtual accounts, and e-wallets. A channel your Mayar
+account has switched off fails when the invoice is created, so the list in
+[`src/lib/payment-methods.ts`](src/lib/payment-methods.ts) has to match what
+that account actually sells.
 
 ## After the first deploy
 
@@ -136,18 +148,31 @@ link at `/s/:token` and exempts that image from the 90-day retention sweep.
 
 ## Buying credits
 
-1. The buyer picks a pack. Mayar requires a mobile number on every invoice, so
-   they are asked once and it is remembered.
-2. The server creates a Mayar invoice and stores its ids. A pending invoice for
-   the same pack is reused rather than replaced, because Mayar answers a
-   duplicate create with `429`.
-3. Payment is proved by fetching the Mayar transaction detail and matching the
+Checkout happens in a dialog on `/credits`. Nobody is sent to a payment page.
+
+1. The buyer picks a pack and a channel. Mayar requires a mobile number on every
+   invoice, so they are asked once and it is remembered.
+2. The server creates a Mayar invoice pinned to that channel. Mayar answers with
+   the payment instrument — a QRIS string, a virtual account number, or an
+   e-wallet link — and the dialog renders it. A pending invoice for the same
+   pack **and the same channel** is reused rather than replaced.
+3. The dialog polls while the buyer pays. The reply says when to ask again, and
+   a claim on the row means several tabs produce one request to Mayar between
+   them.
+4. Payment is proved by fetching the Mayar transaction detail and matching the
    amount, the `paid` status, and the purchase in `extraData`. A browser return
    never grants credits, and neither does a webhook payload on its own.
-4. Credits are granted by a ledger entry whose reference is unique, so a
-   replayed webhook, a re-check button, and the cron cannot grant twice.
-5. Every five minutes a cron settles purchases whose webhook never arrived, and
-   closes invoices that expired unpaid.
+5. Credits are granted by a ledger entry whose reference is unique, so a
+   replayed webhook, a poll, a re-check button, and the cron cannot grant twice.
+6. Every five minutes a cron settles purchases whose webhook never arrived, and
+   closes invoices that expired unpaid an hour ago.
+
+Two things Mayar makes awkward, both handled rather than hidden. It refuses a
+second invoice for one customer at one amount for a minute, so changing channel
+straight away is reported as "wait a minute" instead of failing silently. And
+the payment instrument is undocumented, so it is read leniently: anything
+unrecognised falls back to a link to Mayar's own page. See
+[ADR-0021](docs/adr/0021-render-payment-instructions-in-our-own-ui.md).
 
 **The webhook is optional.** It only makes credits arrive faster. Because
 payment is always proved by a transaction lookup, and because the cron

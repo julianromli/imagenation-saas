@@ -11,7 +11,7 @@ import {
 import { ensureAdmin } from "@/lib/auth.functions";
 import { adjustCredits } from "@/lib/credits";
 import { PLANNING_USD_TO_IDR } from "@/lib/pricing";
-import { reconcilePurchase } from "@/lib/purchase.functions";
+import { reconcilePurchase } from "@/lib/purchase";
 import { creditAdjustmentSchema } from "@/lib/validation";
 
 const DAY_MS = 24 * 60 * 60 * 1000;

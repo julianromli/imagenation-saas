@@ -24,7 +24,7 @@ export const setupGuideSteps: SetupGuideStep[] = [
     to: "/setup",
   },
   {
-    body: "Copy the URL the setup page shows into the Mayar dashboard. Payment is always proved by looking the transaction up with Mayar, and a job reconciles purchases every five minutes, so this only makes credits arrive faster.",
+    body: "Copy the URL the setup page shows into the Mayar dashboard at web.mayar.id, the same account the production API key belongs to. Payment is always proved by looking the transaction up with Mayar, and the checkout re-reads it while the buyer waits, so this only makes credits arrive faster.",
     optional: true,
     title: "Register the Mayar webhook",
   },
@@ -42,7 +42,7 @@ export const setupGuideSteps: SetupGuideStep[] = [
     to: "/credits",
   },
   {
-    body: "Set MAYAR_ENVIRONMENT to production in wrangler.jsonc and swap in your production Mayar API key. Do this after one sandbox purchase has worked end to end, not before.",
-    title: "Switch to live payments",
+    body: "Payments are live: MAYAR_ENVIRONMENT is production, so MAYAR_API_KEY must be a production key from web.mayar.id, and the payment channels you sell through must be switched on in that account. To test with play money instead, set MAYAR_ENVIRONMENT to sandbox and use a sandbox key.",
+    title: "Use a production Mayar key",
   },
 ];

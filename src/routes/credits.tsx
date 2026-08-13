@@ -4,26 +4,25 @@ import {
   Link,
   useRouter,
 } from "@tanstack/react-router";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
+import { CreditCheckoutDialog } from "@/components/credit-checkout-dialog";
 import { Button, buttonVariants } from "@/components/ui/button";
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { listCreditHistory } from "@/lib/credits.functions";
 import { formatDelta, formatIdr, formatMoment } from "@/lib/format";
-import { CREDIT_PACKS, idrPerCredit, RESOLUTION_TIERS } from "@/lib/pricing";
+import type { CreditPack } from "@/lib/pricing";
+import {
+  CREDIT_PACKS,
+  findPack,
+  idrPerCredit,
+  RESOLUTION_TIERS,
+} from "@/lib/pricing";
+import type { PurchaseView } from "@/lib/purchase";
 import {
   getSavedMobile,
   listPurchases,
   refreshPurchase,
-  startPurchase,
 } from "@/lib/purchase.functions";
 import { cn } from "@/lib/utils";
 
@@ -45,9 +44,27 @@ export const Route = createFileRoute("/credits")({
   },
 });
 
+type Checkout = {
+  pack: CreditPack;
+  /** Set when reopening a payment that is already in flight. */
+  resume: PurchaseView | null;
+};
+
 function CreditsPage() {
   const { entries, purchases, savedMobile } = Route.useLoaderData();
   const { balance, signedIn } = rootApi.useLoaderData();
+  const router = useRouter();
+  const [checkout, setCheckout] = useState<Checkout | null>(null);
+
+  const closeCheckout = useCallback((open: boolean) => {
+    if (!open) {
+      setCheckout(null);
+    }
+  }, []);
+
+  const refresh = useCallback(() => {
+    router.invalidate();
+  }, [router]);
 
   return (
     <main className="mx-auto max-w-4xl px-5 pt-12 pb-24 sm:px-8">
@@ -93,14 +110,18 @@ function CreditsPage() {
         </p>
       </section>
 
-      <PackList savedMobile={savedMobile} signedIn={signedIn} />
+      <PackList onBuy={setCheckout} signedIn={signedIn} />
 
       {purchases.length > 0 ? (
         <section className="mt-14">
           <h2 className="text-muted-foreground text-sm">Purchases</h2>
           <ul className="mt-3 divide-y rounded-3xl border">
             {purchases.map((purchase) => (
-              <PurchaseRow key={purchase.id} purchase={purchase} />
+              <PurchaseRow
+                key={purchase.id}
+                onResume={setCheckout}
+                purchase={purchase}
+              />
             ))}
           </ul>
         </section>
@@ -137,78 +158,36 @@ function CreditsPage() {
           </ul>
         </section>
       ) : null}
+
+      {checkout ? (
+        <CreditCheckoutDialog
+          // A fresh dialog per payment, so reopening one never shows the last.
+          key={checkout.resume?.id ?? checkout.pack.id}
+          onOpenChange={closeCheckout}
+          onSettled={refresh}
+          open
+          pack={checkout.pack}
+          resume={checkout.resume}
+          savedMobile={savedMobile}
+        />
+      ) : null}
     </main>
   );
 }
 
 type PackListProps = {
-  savedMobile: string | null;
+  onBuy: (checkout: Checkout) => void;
   signedIn: boolean;
 };
 
-function PackList({ savedMobile, signedIn }: PackListProps) {
-  const [mobile, setMobile] = useState(savedMobile ?? "");
-  // A returning buyer sees the remembered number, not the question again.
-  const [askMobile, setAskMobile] = useState(savedMobile === null);
-  const [pendingPack, setPendingPack] = useState<string | null>(null);
-  const [error, setError] = useState("");
-
-  async function buy(packId: string) {
-    setError("");
-    setPendingPack(packId);
-
-    try {
-      const { paymentUrl } = await startPurchase({
-        data: { mobile: mobile.trim(), packId },
-      });
-
-      window.location.href = paymentUrl;
-    } catch (caught) {
-      setError(
-        caught instanceof Error ? caught.message : "Unable to start the payment"
-      );
-      setPendingPack(null);
-    }
-  }
-
+function PackList({ onBuy, signedIn }: PackListProps) {
   return (
     <section className="mt-12">
       <h2 className="text-muted-foreground text-sm">Buy credits</h2>
-
-      {signedIn && askMobile ? (
-        <FieldGroup className="mt-3 max-w-sm">
-          <Field>
-            <FieldLabel htmlFor="mobile">Mobile number</FieldLabel>
-            <Input
-              autoComplete="tel"
-              id="mobile"
-              inputMode="tel"
-              onChange={(event) => setMobile(event.target.value)}
-              placeholder="08123456789"
-              required
-              type="tel"
-              value={mobile}
-            />
-            <FieldDescription>
-              Mayar needs this on the invoice. It is asked once and remembered.
-            </FieldDescription>
-          </Field>
-        </FieldGroup>
-      ) : null}
-
-      {signedIn && !askMobile ? (
-        <p className="mt-3 text-muted-foreground text-sm">
-          Your invoice goes to{" "}
-          <span className="text-foreground tabular-nums">{mobile}</span>.{" "}
-          <button
-            className="underline underline-offset-4"
-            onClick={() => setAskMobile(true)}
-            type="button"
-          >
-            Change number
-          </button>
-        </p>
-      ) : null}
+      <p className="mt-2 text-muted-foreground text-sm">
+        Pay with QRIS, a bank transfer, or an e-wallet, without leaving this
+        page.
+      </p>
 
       <ul className="mt-6 grid gap-4 sm:grid-cols-3">
         {CREDIT_PACKS.map((pack) => (
@@ -225,14 +204,10 @@ function PackList({ savedMobile, signedIn }: PackListProps) {
             {signedIn ? (
               <Button
                 className="mt-6 min-h-11 rounded-full"
-                disabled={pendingPack !== null || mobile.trim().length < 8}
-                onClick={() => buy(pack.id)}
+                onClick={() => onBuy({ pack, resume: null })}
                 type="button"
                 variant={pack.id === "standard" ? "default" : "outline"}
               >
-                {pendingPack === pack.id ? (
-                  <Spinner data-icon="inline-start" />
-                ) : null}
                 Buy
               </Button>
             ) : (
@@ -249,27 +224,19 @@ function PackList({ savedMobile, signedIn }: PackListProps) {
           </li>
         ))}
       </ul>
-
-      <FieldError className="mt-4">{error}</FieldError>
     </section>
   );
 }
 
 type PurchaseRowProps = {
-  purchase: {
-    amount: number;
-    createdAt: number;
-    credits: number;
-    id: string;
-    paymentUrl: string | null;
-    reference: string;
-    status: string;
-  };
+  onResume: (checkout: Checkout) => void;
+  purchase: PurchaseView;
 };
 
-function PurchaseRow({ purchase }: PurchaseRowProps) {
+function PurchaseRow({ onResume, purchase }: PurchaseRowProps) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const pack = findPack(purchase.packId);
 
   async function recheck() {
     setBusy(true);
@@ -299,12 +266,24 @@ function PurchaseRow({ purchase }: PurchaseRowProps) {
         <span className="capitalize">{purchase.status}</span>
         {purchase.status === "pending" ? (
           <>
+            {pack ? (
+              <Button
+                className="min-h-9 rounded-full"
+                onClick={() => onResume({ pack, resume: purchase })}
+                size="sm"
+                type="button"
+              >
+                Resume payment
+              </Button>
+            ) : null}
             {purchase.paymentUrl ? (
               <a
                 className="underline underline-offset-4"
                 href={purchase.paymentUrl}
+                rel="noreferrer"
+                target="_blank"
               >
-                Pay
+                Pay on Mayar
               </a>
             ) : null}
             <Button
