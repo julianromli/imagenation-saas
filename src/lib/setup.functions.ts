@@ -1,15 +1,22 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
+import { getRequest, getRequestHeaders } from "@tanstack/react-start/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { getDb } from "@/db";
 import { users } from "@/db/schema";
-import { getAuth } from "@/lib/auth";
+import { getAuth, getFreshSession } from "@/lib/auth";
 import { createAccessToken, hashToken } from "@/lib/ids";
+import {
+  readFinishedSteps,
+  shouldShowOnboarding,
+  withServerKnownSteps,
+  writeFinishedSteps,
+} from "@/lib/onboarding";
 import { verifyImageModelAccess } from "@/lib/openrouter";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { getRuntimeEnv } from "@/lib/runtime-env";
+import { setupGuideStepIds } from "@/lib/setup-guide";
 import {
   claimSetup,
   readSetupValue,
@@ -45,12 +52,73 @@ async function isSetupComplete() {
   return setupCompleted;
 }
 
+/**
+ * Whether this viewer is an administrator.
+ *
+ * The role decides who keeps seeing operator instructions, so the cookie cache
+ * is bypassed for the same reason ADR-0014 bypasses it elsewhere. A failure
+ * answers "no": the guide hiding is a smaller harm than a buyer reading it.
+ */
+async function isViewerAdmin() {
+  try {
+    const session = await getFreshSession(getRequestHeaders());
+
+    return session?.user.role === "admin";
+  } catch {
+    return false;
+  }
+}
+
 export const getSetupStatus = createServerFn({ method: "GET" }).handler(
-  async () => ({
-    complete: await isSetupComplete(),
-    tokenConfigured: Boolean(getRuntimeEnv().SETUP_TOKEN),
-  })
+  async () => {
+    const complete = await isSetupComplete();
+    const done = withServerKnownSteps(await readFinishedSteps(), complete);
+
+    return {
+      complete,
+      onboarding: {
+        done,
+        show: shouldShowOnboarding({
+          done,
+          isAdmin: complete ? await isViewerAdmin() : false,
+          setupComplete: complete,
+        }),
+      },
+      tokenConfigured: Boolean(getRuntimeEnv().SETUP_TOKEN),
+    };
+  }
 );
+
+const markStepSchema = z.object({
+  done: z.boolean(),
+  id: z.enum(setupGuideStepIds as [string, ...string[]]),
+});
+
+/**
+ * Ticks or unticks one step.
+ *
+ * Open to anybody only while setup is unfinished, which is the window where no
+ * account exists to be an administrator. Afterwards it is the administrator's
+ * checklist and nobody else's.
+ */
+export const markSetupStep = createServerFn({ method: "POST" })
+  .validator(markStepSchema)
+  .handler(async ({ data }) => {
+    const complete = await isSetupComplete();
+
+    if (complete && !(await isViewerAdmin())) {
+      throw new Error("Forbidden");
+    }
+
+    const stored = await readFinishedSteps();
+    const next = data.done
+      ? [...stored, data.id]
+      : stored.filter((id) => id !== data.id);
+
+    await writeFinishedSteps(next);
+
+    return withServerKnownSteps(next, complete);
+  });
 
 /**
  * Turns a fresh deploy into a usable app.

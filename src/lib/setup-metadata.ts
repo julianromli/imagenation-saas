@@ -7,6 +7,7 @@ import { createId } from "@/lib/ids";
 export const WEBHOOK_SECRET_KEY = "mayar_webhook_secret";
 export const SETUP_COMPLETED_KEY = "setup_completed";
 export const SETUP_CLAIM_KEY = "setup_claim";
+export const ONBOARDING_KEY = "onboarding_progress";
 
 // A claim this old belonged to a run that died before it could finish or clean
 // up. Without a takeover window a crashed setup would lock the store forever.

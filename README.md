@@ -136,9 +136,23 @@ that account actually sells.
 
 ## After the first deploy
 
-A floating **?** button sits in the bottom-left corner of every page while setup
-is unfinished, and opens this same checklist in a sheet. It disappears for good
-once `/setup` completes, so a user never sees it. The steps live in
+This same checklist is a wizard inside the app, one step at a time. It opens
+itself the first time you load the app after deploying — a fresh deploy is
+exactly when you do not know what comes next, so it is not something you have to
+go looking for. Tick a step and it moves to the next; closing it is remembered
+per browser, and a floating **?** button in the bottom-left corner brings it
+back where you left off.
+
+Step 1 ticks itself when `/setup` completes. The other five happen in the Mayar
+dashboard, in a Worker secret, or in an OpenRouter setting, so the app cannot see
+them and takes your word for it. Progress is kept server-side, in
+`setup_metadata`, so finishing on a different machine works.
+
+Before setup, anyone who loads the app sees the wizard — no account exists yet,
+so whoever is looking is you. Afterwards only an administrator does, and only
+until the last step is ticked. That last tick shows a confirmation rather than
+vanishing mid-sentence; closing it is what removes the wizard, for good, and a
+user never sees it. The steps live in
 [`src/lib/setup-guide.ts`](src/lib/setup-guide.ts) — edit that file and this
 section together, or they drift.
 

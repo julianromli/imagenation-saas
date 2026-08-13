@@ -66,7 +66,10 @@ export const Route = createRootRoute({
    */
   loader: async () => {
     const [setup, balance] = await Promise.all([
-      getSetupStatus().catch(() => ({ complete: true })),
+      getSetupStatus().catch(() => ({
+        complete: true,
+        onboarding: { done: [] as string[], show: false },
+      })),
       getBalanceSummary().catch(() => ({
         balance: 0,
         signedIn: false as const,
@@ -75,6 +78,7 @@ export const Route = createRootRoute({
 
     return {
       balance: balance.balance,
+      onboarding: setup.onboarding,
       setupComplete: setup.complete,
       signedIn: balance.signedIn,
     };
@@ -102,7 +106,7 @@ export const Route = createRootRoute({
 });
 
 function RootComponent() {
-  const { balance, setupComplete, signedIn } = Route.useLoaderData();
+  const { balance, onboarding, signedIn } = Route.useLoaderData();
 
   return (
     <>
@@ -111,7 +115,8 @@ function RootComponent() {
         <Outlet />
       </div>
       <SiteFooter />
-      {setupComplete ? null : <SetupGuideButton />}
+      {/* The server decides who sees this, and for how long. See onboarding.ts. */}
+      {onboarding.show ? <SetupGuideButton done={onboarding.done} /> : null}
     </>
   );
 }

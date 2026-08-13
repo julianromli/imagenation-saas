@@ -137,11 +137,27 @@ yang benar-benar dijual akun itu.
 
 ## Setelah deploy pertama
 
-Tombol **?** mengambang di sudut kiri bawah setiap halaman selama setup belum
-selesai, dan membuka daftar yang sama dalam panel. Tombol itu hilang permanen
-begitu `/setup` selesai, jadi pengguna tidak pernah melihatnya. Langkah-langkah
-tersebut ada di [`src/lib/setup-guide.ts`](src/lib/setup-guide.ts) — sunting
-berkas itu bersama bagian ini, atau keduanya akan menyimpang.
+Daftar yang sama ini menjadi wizard di dalam aplikasi, satu langkah per layar.
+Ia membuka dirinya sendiri saat Anda pertama kali memuat aplikasi setelah deploy
+— deploy yang baru selesai justru saat Anda belum tahu apa langkah berikutnya,
+jadi ini bukan sesuatu yang harus dicari dulu. Centang satu langkah dan ia maju
+ke berikutnya; penutupannya diingat per peramban, dan tombol **?** mengambang di
+sudut kiri bawah memanggilnya kembali di posisi terakhir.
+
+Langkah 1 tercentang sendiri begitu `/setup` selesai. Lima sisanya terjadi di
+dasbor Mayar, di secret Worker, atau di pengaturan OpenRouter — aplikasi tidak
+bisa melihatnya, jadi ia percaya pada kata Anda. Kemajuannya disimpan di sisi
+server, di `setup_metadata`, sehingga menyelesaikannya dari mesin lain tetap
+bisa.
+
+Sebelum setup, siapa pun yang memuat aplikasi melihat wizard ini — belum ada
+akun sama sekali, jadi yang melihat pasti Anda. Sesudahnya hanya administrator,
+dan hanya sampai langkah terakhir dicentang. Centang terakhir itu menampilkan
+konfirmasi, bukan lenyap di tengah kalimat; menutup konfirmasi itulah yang
+menghapus wizard-nya, permanen, dan pengguna tidak pernah melihatnya.
+Langkah-langkah tersebut ada di
+[`src/lib/setup-guide.ts`](src/lib/setup-guide.ts) — sunting berkas itu bersama
+bagian ini, atau keduanya akan menyimpang.
 
 1. Selesaikan `/setup`.
 2. Daftarkan URL webhook Mayar yang ditampilkan halaman setup. Ini opsional;
