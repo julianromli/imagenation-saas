@@ -138,6 +138,42 @@
     }
 }
 
+/* Squircle corners.
+ *
+ * `corner-shape` smooths the corner curve into the straight edge instead of
+ * meeting it at a quarter circle. It is a paint-level property, so borders,
+ * ring shadows, and focus outlines follow the new shape rather than being
+ * clipped by it. That is what makes a blanket rule safe here, and it is the
+ * difference from a clip-path approach, which would crop all three.
+ *
+ * Applied to everything rather than to a list of radius utilities. A corner
+ * with no radius has no corner area, so the declaration draws nothing there.
+ * Matching on utility names got this wrong wherever a radius reaches a child
+ * through a variant — `*:[img:first-child]:rounded-t-*` on a card puts the
+ * class on the parent and the radius on the child, so the frame and the image
+ * ended up with different corners.
+ *
+ * Pills are the one exception. Their corners are already a half circle, and
+ * smoothing turns the stadium into a superellipse. The reset outranks the
+ * blanket on specificity, so source order does not matter. It matches
+ * `after:rounded-full` too, which is how the avatar ring and the drawer swipe
+ * handle are drawn.
+ *
+ * Chromium only for now. Every other browser ignores both declarations and
+ * keeps today's circular corners, so there is nothing to fall back to.
+ */
+*,
+*::before,
+*::after {
+  corner-shape: squircle;
+}
+
+[class*="rounded-full"],
+[class*="rounded-full"]::before,
+[class*="rounded-full"]::after {
+  corner-shape: round;
+}
+
 @layer components {
   /* First-run entrance. `backwards` fill holds the from-state during the
      delay, so the resting state stays authoritative if the animation
