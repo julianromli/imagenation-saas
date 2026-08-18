@@ -47,7 +47,7 @@ export function toGenerationView(row: GenerationRow): GenerationView {
 }
 
 async function requireUserId() {
-  const session = await getAuth().api.getSession({
+  const session = await (await getAuth()).api.getSession({
     headers: getRequestHeaders(),
   });
 

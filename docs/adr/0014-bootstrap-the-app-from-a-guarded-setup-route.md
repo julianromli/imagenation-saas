@@ -1,5 +1,7 @@
 # Bootstrap the app from a guarded setup route
 
+Superseded by [ADR-0022](./0022-open-setup-until-the-app-has-an-administrator.md). The `/setup` route remains. The `SETUP_TOKEN` guard does not. The `BETTER_AUTH_SECRET` consequence below is superseded by [ADR-0023](./0023-generate-the-auth-secret-on-first-use.md).
+
 The Deploy to Cloudflare button provisions the bindings and runs migrations through the deploy command, but nothing else. Without a further step, a one-click deploy produces a live app that nobody can administer. A `/setup` route, guarded by a `SETUP_TOKEN` secret set in the deploy form, will create the first admin account, generate the Mayar webhook secret, and show the webhook URL to register. The route marks `setup_metadata` when it finishes and refuses to run again.
 
 Promoting whoever signs up with a configured `ADMIN_EMAIL` was rejected. This application does not verify email addresses, so anyone who guessed the owner's address could register first and take the admin role.

@@ -77,8 +77,8 @@
         "period": 60
       }
     },
-    // Setup runs once for the whole app, so this is keyed on a constant
-    // rather than on the caller. A wrong token should cost the guesser time.
+    // Setup is open until the first administrator exists, so this is keyed
+    // on a constant rather than on the caller. See ADR-0022.
     {
       "name": "SETUP_LIMITER",
       "namespace_id": "2005",

@@ -33,7 +33,7 @@ const pollPurchaseSchema = z.object({
 });
 
 async function requireUser() {
-  const session = await getAuth().api.getSession({
+  const session = await (await getAuth()).api.getSession({
     headers: getRequestHeaders(),
   });
 

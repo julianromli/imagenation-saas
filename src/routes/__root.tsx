@@ -7,12 +7,10 @@ import {
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 
-import { SetupGuideButton } from "@/components/setup-guide-button";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
 import { getBalanceSummary } from "@/lib/credits.functions";
-import { getSetupStatus } from "@/lib/setup.functions";
 
 import appCss from "../styles.css?url";
 
@@ -65,21 +63,13 @@ export const Route = createRootRoute({
    * See ADR-0016.
    */
   loader: async () => {
-    const [setup, balance] = await Promise.all([
-      getSetupStatus().catch(() => ({
-        complete: true,
-        onboarding: { done: [] as string[], show: false },
-      })),
-      getBalanceSummary().catch(() => ({
-        balance: 0,
-        signedIn: false as const,
-      })),
-    ]);
+    const balance = await getBalanceSummary().catch(() => ({
+      balance: 0,
+      signedIn: false as const,
+    }));
 
     return {
       balance: balance.balance,
-      onboarding: setup.onboarding,
-      setupComplete: setup.complete,
       signedIn: balance.signedIn,
     };
   },
@@ -106,7 +96,7 @@ export const Route = createRootRoute({
 });
 
 function RootComponent() {
-  const { balance, onboarding, signedIn } = Route.useLoaderData();
+  const { balance, signedIn } = Route.useLoaderData();
 
   return (
     <>
@@ -115,8 +105,6 @@ function RootComponent() {
         <Outlet />
       </div>
       <SiteFooter />
-      {/* The server decides who sees this, and for how long. See onboarding.ts. */}
-      {onboarding.show ? <SetupGuideButton done={onboarding.done} /> : null}
     </>
   );
 }

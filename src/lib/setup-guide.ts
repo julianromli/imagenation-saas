@@ -1,37 +1,36 @@
 /**
- * The steps between a fresh deploy and an app that can take money.
+ * The steps after the administrator exists and before the app takes live
+ * money.
  *
- * The same sequence is written out in "Quick start" and "After the first
- * deploy" in README.md. Editing one without the other lets them drift, so the
- * README points back here.
+ * Shown on the admin overview. The same sequence is written out in "After the
+ * first deploy" in README.md. Editing one without the other lets them drift.
  *
- * Nothing in this file may carry a secret. The guide is reachable by anyone
- * until setup completes, which is exactly when it is shown.
+ * Nothing in this file may carry a secret.
  */
 export type SetupGuideStep = {
   body: string;
-  /**
-   * Stable across edits. It is what a finished step is recorded under, so
-   * renaming one would make an operator's progress point at nothing. Add ids,
-   * never repurpose them.
-   */
-  id: string;
+  id:
+    | "administrator"
+    | "prices"
+    | "production-key"
+    | "public-url"
+    | "spend-limit"
+    | "webhook";
   /** Shown as "Optional" so nobody is blocked by a step that does not block. */
   optional?: boolean;
   title: string;
   /** An in-app destination, when the step has one. */
-  to?: "/credits" | "/setup";
+  to?: "/credits";
 };
 
 export const setupGuideSteps: SetupGuideStep[] = [
   {
-    body: "Enter the setup token you chose when you deployed. This creates your administrator account, checks that your OpenRouter key can reach the image model, and shows the Mayar webhook URL. It runs once.",
+    body: "Open /setup and create the first administrator. This checks that your OpenRouter key can reach the image model, and shows the Mayar webhook URL. It runs once.",
     id: "administrator",
     title: "Create your administrator",
-    to: "/setup",
   },
   {
-    body: "Copy the URL the setup page shows into the Mayar dashboard at web.mayar.id, the same account the production API key belongs to. Payment is always proved by looking the transaction up with Mayar, and the checkout re-reads it while the buyer waits, so this only makes credits arrive faster.",
+    body: "Copy the webhook URL from this page into the Mayar dashboard. Payment is always proved by looking the transaction up with Mayar, and the checkout re-reads it while the buyer waits, so this only makes credits arrive faster.",
     id: "webhook",
     optional: true,
     title: "Register the Mayar webhook",
@@ -53,19 +52,8 @@ export const setupGuideSteps: SetupGuideStep[] = [
     to: "/credits",
   },
   {
-    body: "Payments are live: MAYAR_ENVIRONMENT is production, so MAYAR_API_KEY must be a production key from web.mayar.id, and the payment channels you sell through must be switched on in that account. To test with play money instead, set MAYAR_ENVIRONMENT to sandbox and use a sandbox key.",
+    body: "Deploys default to production, so this is usually done already. If you deployed with sandbox for testing, set MAYAR_ENVIRONMENT to production in wrangler.jsonc and swap in your production Mayar API key.",
     id: "production-key",
     title: "Use a production Mayar key",
   },
 ];
-
-/**
- * The step `/setup` finishes on its own.
- *
- * Five of the six happen somewhere this app cannot see — the Mayar dashboard,
- * a Worker secret, an OpenRouter spend limit — so they are ticked by hand. This
- * one the server knows for certain, so asking would be theatre.
- */
-export const SERVER_COMPLETED_STEP = "administrator";
-
-export const setupGuideStepIds = setupGuideSteps.map((step) => step.id);

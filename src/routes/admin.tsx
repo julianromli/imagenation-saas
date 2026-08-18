@@ -7,6 +7,7 @@ import {
 import { LayoutDashboard, Receipt, TriangleAlert, Users } from "lucide-react";
 
 import { ensureAdmin } from "@/lib/auth.functions";
+import { getSetupStatus } from "@/lib/setup.functions";
 
 const adminNavItems = [
   // Overview matches exactly. Without it, "/admin" counts as active on every
@@ -24,6 +25,12 @@ const adminNavItems = [
 
 export const Route = createFileRoute("/admin")({
   beforeLoad: async () => {
+    const { complete } = await getSetupStatus();
+
+    if (!complete) {
+      throw redirect({ to: "/setup" });
+    }
+
     try {
       return { session: await ensureAdmin() };
     } catch {

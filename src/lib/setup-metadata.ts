@@ -2,12 +2,13 @@ import { and, eq, lt } from "drizzle-orm";
 
 import { getDb } from "@/db";
 import { setupMetadata } from "@/db/schema";
-import { createId } from "@/lib/ids";
+import { createAccessToken, createId } from "@/lib/ids";
 
 export const WEBHOOK_SECRET_KEY = "mayar_webhook_secret";
 export const SETUP_COMPLETED_KEY = "setup_completed";
 export const SETUP_CLAIM_KEY = "setup_claim";
-export const ONBOARDING_KEY = "onboarding_progress";
+export const ONBOARDING_DISMISSED_KEY = "onboarding_dismissed";
+export const AUTH_SECRET_KEY = "auth_secret";
 
 // A claim this old belonged to a run that died before it could finish or clean
 // up. Without a takeover window a crashed setup would lock the store forever.
@@ -97,4 +98,40 @@ export async function readWebhookSecret() {
   const secret = stored?.secret;
 
   return typeof secret === "string" ? secret : null;
+}
+
+/**
+ * The secret Better Auth signs session cookies with.
+ *
+ * Generated once on first use and then read from this table, so a one-click
+ * deploy has nothing to configure and restarts keep every session valid. The
+ * unique index on `key` settles the first-boot race: a concurrent writer
+ * inserts nothing and reads back the winner's value instead of using its own
+ * candidate. See ADR-0023.
+ */
+export async function getOrCreateAuthSecret() {
+  const stored = await readSetupValue(AUTH_SECRET_KEY);
+
+  if (typeof stored?.secret === "string") {
+    return stored.secret;
+  }
+
+  await getDb()
+    .insert(setupMetadata)
+    .values({
+      id: createId(),
+      key: AUTH_SECRET_KEY,
+      value: { secret: createAccessToken() },
+    })
+    .onConflictDoNothing();
+
+  const winner = await readSetupValue(AUTH_SECRET_KEY);
+
+  if (typeof winner?.secret !== "string") {
+    // A replica that has not seen the winning insert yet answers null. Rare,
+    // and the next request succeeds.
+    throw new Error("Auth secret is not readable yet. Retry the request.");
+  }
+
+  return winner.secret;
 }

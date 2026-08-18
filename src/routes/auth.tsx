@@ -1,5 +1,6 @@
 import {
   createFileRoute,
+  redirect,
   useNavigate,
   useRouter,
 } from "@tanstack/react-router";
@@ -18,10 +19,18 @@ import { Spinner } from "@/components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { authClient } from "@/lib/auth-client";
 import { SIGNUP_GRANT_CREDITS } from "@/lib/pricing";
+import { getSetupStatus } from "@/lib/setup.functions";
 
 type Mode = "sign-in" | "sign-up";
 
 export const Route = createFileRoute("/auth")({
+  beforeLoad: async () => {
+    const { complete } = await getSetupStatus();
+
+    if (!complete) {
+      throw redirect({ to: "/setup" });
+    }
+  },
   component: AuthPage,
   head: () => ({
     meta: [{ title: "Sign in — Imagenation" }],

@@ -5,7 +5,7 @@ import { getAuth } from "@/lib/auth";
 import { listEntries, readBalance } from "@/lib/credits";
 
 async function currentUserId() {
-  const session = await getAuth().api.getSession({
+  const session = await (await getAuth()).api.getSession({
     headers: getRequestHeaders(),
   });
 

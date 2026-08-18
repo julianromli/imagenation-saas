@@ -4,7 +4,7 @@ import { tanstackStartCookies } from "better-auth/tanstack-start";
 
 import { getDb } from "@/db";
 import { authSchema } from "@/db/schema";
-import { requireEnv } from "@/lib/runtime-env";
+import { getOrCreateAuthSecret } from "@/lib/setup-metadata";
 
 // Five minutes. Long enough to remove most session reads from D1, short enough
 // that a revoked session stops working quickly. See ADR-0001.
@@ -20,7 +20,7 @@ const COOKIE_CACHE_SECONDS = 5 * 60;
  * `BETTER_AUTH_URL` after the first deploy is recommended: request inference
  * makes the origin check trust whatever host served the request.
  */
-function createAuth() {
+function createAuth(secret: string) {
   return betterAuth({
     database: drizzleAdapter(getDb(), {
       provider: "sqlite",
@@ -30,7 +30,7 @@ function createAuth() {
       enabled: true,
     },
     plugins: [tanstackStartCookies()],
-    secret: requireEnv("BETTER_AUTH_SECRET"),
+    secret,
     session: {
       cookieCache: {
         enabled: true,
@@ -49,10 +49,16 @@ function createAuth() {
   });
 }
 
-let instance: ReturnType<typeof createAuth> | undefined;
+let instance: Promise<ReturnType<typeof createAuth>> | undefined;
 
+/**
+ * The secret lives in `setup_metadata`, generated on first use, so the deploy
+ * form asks for nothing and restarts keep sessions valid. Caching the promise
+ * rather than the built instance shares the one D1 read between concurrent
+ * first requests. See ADR-0023.
+ */
 export function getAuth() {
-  instance ??= createAuth();
+  instance ??= getOrCreateAuthSecret().then(createAuth);
 
   return instance;
 }
@@ -62,8 +68,8 @@ export function getAuth() {
  * decision depends on `role`, because setup promotes an account that already
  * exists and a cached cookie would hold the old role. See ADR-0014.
  */
-export function getFreshSession(headers: Headers) {
-  return getAuth().api.getSession({
+export async function getFreshSession(headers: Headers) {
+  return (await getAuth()).api.getSession({
     headers,
     query: { disableCookieCache: true },
   });

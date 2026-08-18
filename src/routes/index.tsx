@@ -1,11 +1,19 @@
-import { createFileRoute, getRouteApi } from "@tanstack/react-router";
+import { createFileRoute, getRouteApi, redirect } from "@tanstack/react-router";
 
 import { ImageGenerator } from "@/components/image-generator";
 import { listGenerations } from "@/lib/generation.functions";
+import { getSetupStatus } from "@/lib/setup.functions";
 
 const rootApi = getRouteApi("__root__");
 
 export const Route = createFileRoute("/")({
+  beforeLoad: async () => {
+    const { complete } = await getSetupStatus();
+
+    if (!complete) {
+      throw redirect({ to: "/setup" });
+    }
+  },
   component: CreatePage,
   head: () => ({
     meta: [

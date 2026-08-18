@@ -21,7 +21,7 @@ adalah contoh saudara untuk pola embedded (iframe).
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/mayarid/imagenation-saas)
 
-Semua yang dibutuhkan aplikasi ini disiapkan otomatis. Siapkan empat secret
+Semua yang dibutuhkan aplikasi ini disiapkan otomatis. Siapkan dua secret
 sebelum menekan tombol: lihat [Variabel lingkungan](#variabel-lingkungan).
 
 ## Teknologi
@@ -71,42 +71,27 @@ Dokumentasi Mayar V2: [Create invoice](https://docs.mayar.id/api-reference-v2/in
 
 1. Klik **Deploy to Cloudflare**. Cloudflare menyalin repositori ini dan membuat
    basis data D1, bucket R2, serta rate limiter dari `wrangler.jsonc`.
-2. Isi empat secret. Formulirnya hanya menampilkan namanya, jadi
-   [apa isi keempat secret itu](#apa-isi-keempat-secret-itu) menjelaskan satu per
+2. Isi dua secret. Formulirnya hanya menampilkan namanya, jadi
+   [apa isi kedua secret itu](#apa-isi-kedua-secret-itu) menjelaskan satu per
    satu. Siapkan sebelum Anda mengklik.
-3. Setelah deploy selesai, buka `https://<worker-anda>.workers.dev/setup` lalu
-   masukkan setup token Anda. Halaman itu membuat akun administrator pertama,
+3. Setelah deploy selesai, buka `https://<worker-anda>.workers.dev`. Halaman
+   depan mengarah ke `/setup`. Halaman itu membuat akun administrator pertama,
    memeriksa bahwa kunci OpenRouter Anda dapat menjangkau model gambar, dan
-   menampilkan URL webhook Mayar untuk didaftarkan.
+   menampilkan URL webhook Mayar untuk didaftarkan. Masuk tertutup sampai
+   langkah ini selesai.
 4. Kerjakan [Setelah deploy pertama](#setelah-deploy-pertama). Yang paling
    penting di sana adalah memasang `BETTER_AUTH_URL`.
 
-### Apa isi keempat secret itu
+### Apa isi kedua secret itu
 
-Dua Anda karang sendiri. Dua lagi Anda ambil dari layanan lain. Tidak ada yang
-lain diminta, dan tidak satu pun bisa diubah dari dalam aplikasi setelahnya —
-semuanya secret Worker, disunting di dasbor Cloudflare atau dengan
-`wrangler secret put`.
+Keduanya diambil dari layanan lain. Tidak ada yang lain diminta, dan tidak satu
+pun bisa diubah dari dalam aplikasi setelahnya — keduanya secret Worker,
+disunting di dasbor Cloudflare atau dengan `wrangler secret put`.
 
-#### `BETTER_AUTH_SECRET`
-
-Menandatangani cookie sesi. Teks acak yang panjang; tidak pernah diketik lagi.
-
-```sh
-openssl rand -base64 32
-```
-
-Simpan salinannya. Menggantinya kemudian mengeluarkan semua sesi yang ada.
-
-#### `SETUP_TOKEN`
-
-Membuka `/setup`, halaman sekali jalan yang membuat akun administrator Anda.
-Anda mengetiknya sekali, pada langkah 3 di atas, jadi simpan di tempat yang
-mudah dijangkau sebentar lagi.
-
-```sh
-openssl rand -base64 24
-```
+Tidak ada `BETTER_AUTH_SECRET` yang perlu diisi. Worker membuatnya sendiri
+saat pertama dipakai dan menyimpannya di D1, jadi sesi tetap valid setelah
+restart dan formulir deploy tetap singkat. Lihat
+[ADR-0023](docs/adr/0023-generate-the-auth-secret-on-first-use.md).
 
 #### `OPENROUTER_API_KEY`
 
@@ -126,9 +111,6 @@ Mau menerima pembayaran uji dulu? Di salinan repo Anda, ubah
 `MAYAR_ENVIRONMENT` menjadi `sandbox` di `wrangler.jsonc` dan pakai kunci dari
 [web.mayar.io/api-keys](https://web.mayar.io/api-keys).
 
-Tidak punya `openssl`? Pembangkit kata sandi apa pun cukup untuk dua yang
-pertama. Syaratnya hanya panjang dan tidak bisa ditebak.
-
 ### Pengembangan lokal
 
 Membutuhkan Bun 1.3 atau lebih baru.
@@ -137,12 +119,11 @@ Membutuhkan Bun 1.3 atau lebih baru.
 git clone https://github.com/mayarid/imagenation-saas
 cd imagenation-saas
 bun install
-bun run setup   # menulis .dev.vars, membuat secret, migrasi D1 lokal
+bun run setup   # migrasi D1 lokal dan menghapus kunci yang tidak dipakai
 bun dev
 ```
 
-Lalu buka `http://localhost:3000/setup` dan pakai token yang dicetak oleh
-`bun run setup`.
+Lalu buka `http://localhost:3000`. Halaman depan mengarah ke `/setup`.
 
 ## Variabel lingkungan
 
@@ -152,12 +133,15 @@ tanpa ID di `wrangler.jsonc`, sehingga Wrangler membuatnya secara lokal saat
 
 | Variabel | Wajib | Fungsinya |
 | --- | --- | --- |
-| `BETTER_AUTH_SECRET` | Ya | Menandatangani cookie sesi. Buat dengan `openssl rand -base64 32`. Menggantinya mengeluarkan semua orang. |
-| `SETUP_TOKEN` | Ya | Membuka halaman `/setup` yang hanya berjalan sekali. Teks acak yang panjang. |
 | `OPENROUTER_API_KEY` | Ya | Membayar setiap gambar yang dibuat. **Pasang batas pengeluaran padanya.** |
 | `MAYAR_API_KEY` | Ya | Menjual paket kredit. Kunci sandbox dan produksi berbeda. |
 | `BETTER_AUTH_URL` | Tidak | URL publik Anda. Tanpa ini, Better Auth membaca origin dari tiap permintaan. |
 | `MAYAR_ENVIRONMENT` | Tidak | `production` (bawaan) atau `sandbox`. Diatur di `wrangler.jsonc`. |
+
+Tidak ada `BETTER_AUTH_SECRET` yang perlu diisi. Worker membuatnya sendiri
+saat pertama dipakai dan menyimpannya di D1, jadi sesi tetap valid setelah
+restart. Lihat
+[ADR-0023](docs/adr/0023-generate-the-auth-secret-on-first-use.md).
 
 **Pembayaran sudah live.** `MAYAR_ENVIRONMENT` bernilai `production` di
 `wrangler.jsonc`, jadi `MAYAR_API_KEY` harus kunci produksi dari
@@ -177,31 +161,15 @@ yang benar-benar dijual akun itu.
 
 ## Setelah deploy pertama
 
-Daftar yang sama ini menjadi wizard di dalam aplikasi, satu langkah per layar.
-Ia membuka dirinya sendiri saat Anda pertama kali memuat aplikasi setelah deploy
-— deploy yang baru selesai justru saat Anda belum tahu apa langkah berikutnya,
-jadi ini bukan sesuatu yang harus dicari dulu. Centang satu langkah dan ia maju
-ke berikutnya; penutupannya diingat per peramban, dan tombol **?** mengambang di
-sudut kiri bawah memanggilnya kembali di posisi terakhir.
-
-Langkah 1 tercentang sendiri begitu `/setup` selesai. Lima sisanya terjadi di
-dasbor Mayar, di secret Worker, atau di pengaturan OpenRouter — aplikasi tidak
-bisa melihatnya, jadi ia percaya pada kata Anda. Kemajuannya disimpan di sisi
-server, di `setup_metadata`, sehingga menyelesaikannya dari mesin lain tetap
-bisa.
-
-Sebelum setup, siapa pun yang memuat aplikasi melihat wizard ini — belum ada
-akun sama sekali, jadi yang melihat pasti Anda. Sesudahnya hanya administrator,
-dan hanya sampai langkah terakhir dicentang. Centang terakhir itu menampilkan
-konfirmasi, bukan lenyap di tengah kalimat; menutup konfirmasi itulah yang
-menghapus wizard-nya, permanen, dan pengguna tidak pernah melihatnya.
-Langkah-langkah tersebut ada di
-[`src/lib/setup-guide.ts`](src/lib/setup-guide.ts) — sunting berkas itu bersama
-bagian ini, atau keduanya akan menyimpang.
+Halaman depan mengarah ke `/setup` sampai administrator ada. Setelah itu, sisa
+langkah ada di ringkasan admin sebagai **Finish your app**. Pembeli tidak
+pernah melihatnya. Salinannya ada di
+[`src/lib/setup-guide.ts`](src/lib/setup-guide.ts) — ubah berkas itu dan bagian
+ini bersamaan, atau keduanya akan menyimpang.
 
 1. Selesaikan `/setup`.
-2. Daftarkan URL webhook Mayar yang ditampilkan halaman setup. Ini opsional;
-   lihat [Membeli kredit](#membeli-kredit).
+2. Daftarkan URL webhook Mayar yang ditampilkan di ringkasan admin. Ini
+   opsional; lihat [Membeli kredit](#membeli-kredit).
 3. Setel `BETTER_AUTH_URL` ke URL publik Anda. Disarankan: tanpa itu,
    pemeriksaan origin mempercayai host mana pun yang melayani permintaan.
 4. Pasang batas pengeluaran pada kunci OpenRouter. Kunci itu membayar setiap
@@ -210,7 +178,10 @@ bagian ini, atau keduanya akan menyimpang.
 5. Periksa harga. Lihat [Kredit dan harga](#kredit-dan-harga) — angka yang
    dikirim di sini diukur terhadap harga model tertentu dan kurs tertentu, dan
    keduanya bergerak.
-6. Pertimbangkan lokasi basis data D1 Anda. Deploy satu klik tidak dapat memilih
+6. Pembayaran sudah live sejak deploy. Kalau Anda memilih sandbox untuk uji,
+   ubah `MAYAR_ENVIRONMENT` ke production di `wrangler.jsonc` dan ganti dengan
+   kunci API Mayar production Anda.
+7. Pertimbangkan lokasi basis data D1 Anda. Deploy satu klik tidak dapat memilih
    lokasi utama. Untuk memindahkannya, buat basis data dengan
    `wrangler d1 create <nama> --location <hint>` lalu arahkan binding ke sana.
 
@@ -306,7 +277,7 @@ Publik:
 - `/auth` — masuk dan membuat akun, dalam satu halaman
 - `/s/:token` — gambar yang dibagikan
 - `/legal/privacy`, `/legal/terms`, `/legal/refund`
-- `/setup` — bootstrap sekali jalan, dijaga oleh `SETUP_TOKEN`
+- `/setup` — setup sekali jalan. Terbuka sampai selesai, lalu tertutup.
 
 Setelah masuk:
 

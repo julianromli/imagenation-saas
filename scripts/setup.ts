@@ -1,18 +1,17 @@
 import { spawnSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 
 /**
  * Prepares a local development environment.
  *
- * This script only does the work that needs a terminal: write .dev.vars, mint
- * secrets, and apply migrations to the local D1. Creating the administrator
- * happens at /setup, so that one-click deploys and local clones follow the
- * same path. See ADR-0014.
+ * This script only does the work that needs a terminal: prune keys the app no
+ * longer reads from `.dev.vars` and apply migrations to the local D1. The
+ * Worker mints `BETTER_AUTH_SECRET` itself on first use (ADR-0023), and
+ * creating the administrator happens at `/setup`, so that one-click deploys
+ * and local clones follow the same path. See ADR-0022.
  */
 
 const ENV_PATH = ".dev.vars";
-const SETUP_TOKEN_LINE = /^SETUP_TOKEN=(.+)$/m;
 
 function fail(message: string): never {
   console.error(`Setup failed: ${message}`);
@@ -35,28 +34,23 @@ function hasKey(contents: string, key: string) {
   return new RegExp(`^${key}=.+$`, "m").test(contents);
 }
 
-function appendKey(key: string, value: string) {
+function removeKey(key: string) {
   const current = readDevVars();
-  const separator = current.length > 0 && !current.endsWith("\n") ? "\n" : "";
+  const next = current.replace(new RegExp(`^${key}=.*\\n?`, "m"), "");
 
-  writeFileSync(ENV_PATH, `${current}${separator}${key}=${value}\n`, {
-    mode: 0o600,
-  });
-  // `mode` only applies when the file is created, and this file holds secrets.
+  if (next === current) {
+    return;
+  }
+
+  writeFileSync(ENV_PATH, next, { mode: 0o600 });
   chmodSync(ENV_PATH, 0o600);
-  console.log(`Generated ${key} in ${ENV_PATH}`);
+  console.log(`Removed unused ${key} from ${ENV_PATH}`);
 }
 
-function ensureSecrets() {
-  const contents = readDevVars();
-
-  if (!hasKey(contents, "BETTER_AUTH_SECRET")) {
-    appendKey("BETTER_AUTH_SECRET", randomBytes(32).toString("base64url"));
-  }
-
-  if (!hasKey(readDevVars(), "SETUP_TOKEN")) {
-    appendKey("SETUP_TOKEN", randomBytes(24).toString("base64url"));
-  }
+function removeUnusedKeys() {
+  removeKey("SETUP_TOKEN");
+  // The Worker mints this itself now. See ADR-0023.
+  removeKey("BETTER_AUTH_SECRET");
 }
 
 function reportMissing() {
@@ -73,13 +67,11 @@ function reportMissing() {
 }
 
 function printNextSteps() {
-  const token =
-    readDevVars().match(SETUP_TOKEN_LINE)?.[1] ?? "your setup token";
-
   console.log("\nSetup complete. Next steps:");
   console.log("  1. bun dev");
-  console.log("  2. Open http://localhost:3000/setup");
-  console.log(`  3. Use this setup token: ${token}`);
+  console.log(
+    "  2. Open http://localhost:3000 — the home page sends you to /setup"
+  );
   console.log(
     "\nThe setup page creates your administrator, checks your OpenRouter key,"
   );
@@ -87,7 +79,7 @@ function printNextSteps() {
 }
 
 function main() {
-  ensureSecrets();
+  removeUnusedKeys();
   run("bunx", ["wrangler", "d1", "migrations", "apply", "DB", "--local"]);
   reportMissing();
   printNextSteps();

@@ -10,10 +10,8 @@ interface __BaseEnv_Env {
 	POLL_LIMITER: RateLimit;
 	WEBHOOK_LIMITER: RateLimit;
 	SETUP_LIMITER: RateLimit;
-	MAYAR_ENVIRONMENT: "sandbox";
-	BETTER_AUTH_SECRET: string;
+	MAYAR_ENVIRONMENT: "production";
 	BETTER_AUTH_URL: string;
-	SETUP_TOKEN: string;
 	OPENROUTER_API_KEY: string;
 	MAYAR_API_KEY: string;
 }
@@ -28,7 +26,7 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "MAYAR_ENVIRONMENT" | "BETTER_AUTH_SECRET" | "BETTER_AUTH_URL" | "SETUP_TOKEN" | "OPENROUTER_API_KEY" | "MAYAR_API_KEY">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "MAYAR_ENVIRONMENT" | "BETTER_AUTH_URL" | "OPENROUTER_API_KEY" | "MAYAR_API_KEY">> {}
 }
 
 // Begin runtime types

@@ -19,7 +19,7 @@ is the sibling sample for the embedded (iframe) pattern.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/mayarid/imagenation-saas)
 
-Everything the app needs is provisioned for you. Prepare four secrets before you
+Everything the app needs is provisioned for you. Prepare two secrets before you
 click: see [Environment variables](#environment-variables).
 
 ## Demo
@@ -73,40 +73,26 @@ Mayar V2 docs: [Create invoice](https://docs.mayar.id/api-reference-v2/invoice/c
 
 1. Click **Deploy to Cloudflare**. Cloudflare forks the repository and creates
    the D1 database, the R2 bucket, and the rate limiters from `wrangler.jsonc`.
-2. Fill in the four secrets. The form lists their names and nothing else, so
-   [what the four secrets are](#what-the-four-secrets-are) explains each one.
+2. Fill in the two secrets. The form lists their names and nothing else, so
+   [what the two secrets are](#what-the-two-secrets-are) explains each one.
    Have them ready before you click.
-3. When the deploy finishes, open `https://<your-worker>.workers.dev/setup` and
-   enter your setup token. That page creates your administrator account, checks
-   that your OpenRouter key can reach the image model, and shows the Mayar
-   webhook URL to register.
+3. When the deploy finishes, open `https://<your-worker>.workers.dev`. The
+   home page sends you to `/setup`. That page creates your administrator
+   account, checks that your OpenRouter key can reach the image model, and
+   shows the Mayar webhook URL to register. Sign-in stays closed until this
+   finishes.
 4. Work through [After the first deploy](#after-the-first-deploy). Setting
    `BETTER_AUTH_URL` is the one that matters most.
 
-### What the four secrets are
+### What the two secrets are
 
-Two you invent. Two you collect from another service. Nothing else is asked for,
-and none of them can be changed from inside the app afterwards — they are Worker
-secrets, edited in the Cloudflare dashboard or with `wrangler secret put`.
+Both come from another service. Nothing else is asked for, and neither can be
+changed from inside the app afterwards — they are Worker secrets, edited in the
+Cloudflare dashboard or with `wrangler secret put`.
 
-#### `BETTER_AUTH_SECRET`
-
-Signs session cookies. Any long random string; nobody ever types it again.
-
-```sh
-openssl rand -base64 32
-```
-
-Keep a copy. Changing it later signs every existing session out.
-
-#### `SETUP_TOKEN`
-
-Unlocks `/setup`, the one-time page that creates your administrator account. You
-type this once, at step 3 above, so keep it somewhere you can reach in a minute.
-
-```sh
-openssl rand -base64 24
-```
+There is no `BETTER_AUTH_SECRET` to set. The Worker generates it on first use
+and stores it in D1, so sessions survive restarts and the deploy form stays
+short. See [ADR-0023](docs/adr/0023-generate-the-auth-secret-on-first-use.md).
 
 #### `OPENROUTER_API_KEY`
 
@@ -126,9 +112,6 @@ Want to take test payments first? On your fork, set `MAYAR_ENVIRONMENT` to
 `sandbox` in `wrangler.jsonc` and use a key from
 [web.mayar.io/api-keys](https://web.mayar.io/api-keys).
 
-No `openssl` on your machine? Any password generator does for the first two.
-They only have to be long and unguessable.
-
 ### Local development
 
 Requires Bun 1.3 or newer.
@@ -137,12 +120,11 @@ Requires Bun 1.3 or newer.
 git clone https://github.com/mayarid/imagenation-saas
 cd imagenation-saas
 bun install
-bun run setup   # writes .dev.vars, mints secrets, migrates the local D1
+bun run setup   # migrates the local D1 and prunes unused keys
 bun dev
 ```
 
-Then open `http://localhost:3000/setup` and use the token that `bun run setup`
-printed.
+Then open `http://localhost:3000`. The home page sends you to `/setup`.
 
 ## Environment variables
 
@@ -152,12 +134,14 @@ provisions them on your account at deploy time.
 
 | Variable | Required | What it is |
 | --- | --- | --- |
-| `BETTER_AUTH_SECRET` | Yes | Signs session cookies. Generate with `openssl rand -base64 32`. Changing it signs everyone out. |
-| `SETUP_TOKEN` | Yes | Unlocks the one-time `/setup` page. Any long random string. |
 | `OPENROUTER_API_KEY` | Yes | Pays for every generated image. **Put a spend limit on it.** |
 | `MAYAR_API_KEY` | Yes | Sells credit packs. Sandbox and production keys differ. |
 | `BETTER_AUTH_URL` | No | Your public URL. Without it, Better Auth reads the origin from each request. |
 | `MAYAR_ENVIRONMENT` | No | `production` (default) or `sandbox`. Set in `wrangler.jsonc`. |
+
+There is no `BETTER_AUTH_SECRET` to set. The Worker generates it on first use
+and stores it in D1, so sessions survive restarts. See
+[ADR-0023](docs/adr/0023-generate-the-auth-secret-on-first-use.md).
 
 **Payments are live by default.** `MAYAR_ENVIRONMENT` is `production` in
 `wrangler.jsonc`, so `MAYAR_API_KEY` has to be a production key from
@@ -175,28 +159,14 @@ that account actually sells.
 
 ## After the first deploy
 
-This same checklist is a wizard inside the app, one step at a time. It opens
-itself the first time you load the app after deploying — a fresh deploy is
-exactly when you do not know what comes next, so it is not something you have to
-go looking for. Tick a step and it moves to the next; closing it is remembered
-per browser, and a floating **?** button in the bottom-left corner brings it
-back where you left off.
-
-Step 1 ticks itself when `/setup` completes. The other five happen in the Mayar
-dashboard, in a Worker secret, or in an OpenRouter setting, so the app cannot see
-them and takes your word for it. Progress is kept server-side, in
-`setup_metadata`, so finishing on a different machine works.
-
-Before setup, anyone who loads the app sees the wizard — no account exists yet,
-so whoever is looking is you. Afterwards only an administrator does, and only
-until the last step is ticked. That last tick shows a confirmation rather than
-vanishing mid-sentence; closing it is what removes the wizard, for good, and a
-user never sees it. The steps live in
+The home page sends you to `/setup` until the administrator exists. After that,
+the remaining steps live on the admin overview as **Finish your app**. A buyer
+never sees them. The copy lives in
 [`src/lib/setup-guide.ts`](src/lib/setup-guide.ts) — edit that file and this
 section together, or they drift.
 
 1. Complete `/setup`.
-2. Register the Mayar webhook URL that the setup page shows. This is optional;
+2. Register the Mayar webhook URL shown on admin overview. This is optional;
    see [Buying credits](#buying-credits).
 3. Set `BETTER_AUTH_URL` to your public URL. Recommended: without it, the origin
    check trusts whatever host served the request.
@@ -205,7 +175,10 @@ section together, or they drift.
 5. Check the prices. See [Credits and prices](#credits-and-prices) — the numbers
    shipped here were measured against a specific model price and a specific
    exchange rate, and both move.
-6. Consider where your D1 database lives. A one-click deploy cannot choose the
+6. Payments are live from the deploy. If you chose sandbox for testing, switch
+   `MAYAR_ENVIRONMENT` to production in `wrangler.jsonc` and swap in your
+   production Mayar API key.
+7. Consider where your D1 database lives. A one-click deploy cannot choose the
    primary location. To move it, create a database with
    `wrangler d1 create <name> --location <hint>` and point the binding at it.
 
@@ -293,7 +266,7 @@ Public:
 - `/auth` — sign in and create an account, on one page
 - `/s/:token` — a shared image
 - `/legal/privacy`, `/legal/terms`, `/legal/refund`
-- `/setup` — one-time bootstrap, guarded by `SETUP_TOKEN`
+- `/setup` — one-time setup. Open until it completes, then closed.
 
 Signed in:
 

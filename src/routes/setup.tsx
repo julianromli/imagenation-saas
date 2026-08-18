@@ -40,7 +40,6 @@ function SetupPage() {
             email: String(form.get("email") ?? ""),
             name: String(form.get("name") ?? ""),
             password: String(form.get("password") ?? ""),
-            token: String(form.get("token") ?? ""),
           },
         })
       );
@@ -141,26 +140,8 @@ function SetupPage() {
         webhook secret.
       </p>
 
-      {status.tokenConfigured ? null : (
-        <Alert className="mt-6" variant="destructive">
-          <AlertDescription>
-            SETUP_TOKEN is not set. Add it as a Worker secret, then reload.
-          </AlertDescription>
-        </Alert>
-      )}
-
       <form className="mt-8" onSubmit={submit}>
         <FieldGroup>
-          <Field>
-            <FieldLabel htmlFor="setup-token">Setup token</FieldLabel>
-            <Input
-              autoComplete="off"
-              id="setup-token"
-              name="token"
-              required
-              type="password"
-            />
-          </Field>
           <Field>
             <FieldLabel htmlFor="setup-name">Your name</FieldLabel>
             <Input id="setup-name" name="name" required type="text" />
@@ -183,11 +164,7 @@ function SetupPage() {
 
           <FieldError>{error}</FieldError>
 
-          <Button
-            className="rounded-full"
-            disabled={submitting || !status.tokenConfigured}
-            type="submit"
-          >
+          <Button className="rounded-full" disabled={submitting} type="submit">
             {submitting ? <Spinner data-icon="inline-start" /> : null}
             Complete setup
           </Button>
