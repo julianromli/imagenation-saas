@@ -2,6 +2,8 @@
 
 **English** · [Bahasa Indonesia](README.id.md)
 
+Sample Cloudflare app for **Mayar Native Custom Checkout**.
+
 A credit-based AI image generator that runs entirely on Cloudflare, built with
 TanStack Start, Better Auth, Drizzle ORM, D1, R2, OpenRouter, and Mayar V2
 payments.
@@ -9,7 +11,13 @@ payments.
 People sign up, get free credits, describe an image, and get one back. More
 credits are bought as packs. There is no landing page: `/` is the app.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/julianromli/imagenation-saas)
+The buyer picks a pack and a channel. The Worker creates a Mayar invoice with
+`paymentMethod` pinned. The dialog renders a QRIS string, a virtual account
+number, or an e-wallet link. Nobody leaves the app. Nobody loads an iframe.
+[kertaskerja-digital-store](https://github.com/mayarid/kertaskerja-digital-store)
+is the sibling sample for the embedded (iframe) pattern.
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/mayarid/imagenation-saas)
 
 Everything the app needs is provisioned for you. Prepare four secrets before you
 click: see [Environment variables](#environment-variables).
@@ -29,6 +37,35 @@ https://github.com/user-attachments/assets/316ea786-53f7-4799-abe8-f5e2eb76cd40
 - OpenRouter for image generation, on `google/gemini-3.1-flash-image`
 - Mayar V2 for selling credit packs
 - Cloudflare rate limiting bindings and a cron trigger
+
+## How Native Custom Checkout works
+
+Use this repo to learn the native custom checkout pattern for Mayar Invoice API
+v2. The buyer pays inside the app. The full settlement story is in
+[Buying credits](#buying-credits).
+
+1. The buyer picks a pack and a channel on `/credits`.
+2. The Worker creates a Mayar invoice with `paymentMethod` pinned
+   (`POST /hl/v2/invoices/create`).
+3. Mayar answers with `paymentDetail` — a QRIS string, a virtual account
+   number, or an e-wallet link — and the dialog renders it.
+4. The dialog polls while the buyer pays. A webhook and a cron also watch.
+5. Payment is proved by fetching the Mayar transaction and matching the amount,
+   the `paid` status, and the purchase in `extraData`.
+6. Credits are granted once, by a ledger entry whose reference is unique.
+
+The files that implement this:
+
+- [`src/lib/mayar.ts`](src/lib/mayar.ts) — invoice create with `paymentMethod`
+- [`src/lib/payment-methods.ts`](src/lib/payment-methods.ts) — lenient
+  `paymentDetail` parse
+- [`src/components/credit-checkout-dialog.tsx`](src/components/credit-checkout-dialog.tsx)
+  — in-app payment UI
+- [`src/lib/purchase.ts`](src/lib/purchase.ts) — reuse, poll, settle
+- [ADR-0021](docs/adr/0021-render-payment-instructions-in-our-own-ui.md)
+
+Mayar V2 docs: [Create invoice](https://docs.mayar.id/api-reference-v2/invoice/create),
+[Get invoice detail](https://docs.mayar.id/api-reference-v2/invoice/detail).
 
 ## Quick start
 
@@ -97,7 +134,7 @@ They only have to be long and unguessable.
 Requires Bun 1.3 or newer.
 
 ```sh
-git clone https://github.com/julianromli/imagenation-saas
+git clone https://github.com/mayarid/imagenation-saas
 cd imagenation-saas
 bun install
 bun run setup   # writes .dev.vars, mints secrets, migrates the local D1

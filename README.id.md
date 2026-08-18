@@ -2,6 +2,8 @@
 
 [English](README.md) · **Bahasa Indonesia**
 
+Contoh aplikasi Cloudflare untuk **Mayar Native Custom Checkout**.
+
 Generator gambar AI berbasis kredit yang berjalan sepenuhnya di Cloudflare,
 dibangun dengan TanStack Start, Better Auth, Drizzle ORM, D1, R2, OpenRouter,
 dan pembayaran Mayar V2.
@@ -10,7 +12,14 @@ Pengguna mendaftar, mendapat kredit gratis, menuliskan deskripsi gambar, lalu
 menerima gambarnya. Kredit tambahan dibeli sebagai paket. Tidak ada halaman
 landing: `/` adalah aplikasinya.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/julianromli/imagenation-saas)
+Pembeli memilih paket dan channel. Worker membuat invoice Mayar dengan
+`paymentMethod` yang dipasang. Dialog menampilkan string QRIS, nomor virtual
+account, atau tautan e-wallet. Tidak ada yang meninggalkan aplikasi. Tidak ada
+yang memuat iframe.
+[kertaskerja-digital-store](https://github.com/mayarid/kertaskerja-digital-store)
+adalah contoh saudara untuk pola embedded (iframe).
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/mayarid/imagenation-saas)
 
 Semua yang dibutuhkan aplikasi ini disiapkan otomatis. Siapkan empat secret
 sebelum menekan tombol: lihat [Variabel lingkungan](#variabel-lingkungan).
@@ -24,6 +33,37 @@ sebelum menekan tombol: lihat [Variabel lingkungan](#variabel-lingkungan).
 - OpenRouter untuk pembuatan gambar, pada `google/gemini-3.1-flash-image`
 - Mayar V2 untuk menjual paket kredit
 - Binding rate limiting Cloudflare dan satu cron trigger
+
+## Cara kerja Native Custom Checkout
+
+Pakai repo ini untuk mempelajari pola native custom checkout pada Mayar Invoice
+API v2. Pembeli membayar di dalam aplikasi. Cerita penyelesaian lengkap ada di
+[Membeli kredit](#membeli-kredit).
+
+1. Pembeli memilih paket dan channel di `/credits`.
+2. Worker membuat invoice Mayar dengan `paymentMethod` yang dipasang
+   (`POST /hl/v2/invoices/create`).
+3. Mayar menjawab dengan `paymentDetail` — string QRIS, nomor virtual account,
+   atau tautan e-wallet — dan dialog menampilkannya.
+4. Dialog melakukan poll sementara pembeli membayar. Webhook dan cron juga
+   mengawasi.
+5. Pembayaran dibuktikan dengan mengambil transaksi Mayar lalu mencocokkan
+   jumlah, status `paid`, dan pembelian di `extraData`.
+6. Kredit diberikan sekali, lewat entri ledger yang referensinya unik.
+
+Berkas yang mengerjakannya:
+
+- [`src/lib/mayar.ts`](src/lib/mayar.ts) — pembuatan invoice dengan
+  `paymentMethod`
+- [`src/lib/payment-methods.ts`](src/lib/payment-methods.ts) — parse
+  `paymentDetail` yang longgar
+- [`src/components/credit-checkout-dialog.tsx`](src/components/credit-checkout-dialog.tsx)
+  — UI pembayaran di dalam aplikasi
+- [`src/lib/purchase.ts`](src/lib/purchase.ts) — reuse, poll, settle
+- [ADR-0021](docs/adr/0021-render-payment-instructions-in-our-own-ui.md)
+
+Dokumentasi Mayar V2: [Create invoice](https://docs.mayar.id/api-reference-v2/invoice/create),
+[Get invoice detail](https://docs.mayar.id/api-reference-v2/invoice/detail).
 
 ## Mulai cepat
 
@@ -94,7 +134,7 @@ pertama. Syaratnya hanya panjang dan tidak bisa ditebak.
 Membutuhkan Bun 1.3 atau lebih baru.
 
 ```sh
-git clone https://github.com/julianromli/imagenation-saas
+git clone https://github.com/mayarid/imagenation-saas
 cd imagenation-saas
 bun install
 bun run setup   # menulis .dev.vars, membuat secret, migrasi D1 lokal
